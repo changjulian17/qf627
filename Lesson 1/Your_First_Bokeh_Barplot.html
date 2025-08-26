@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Bokeh Plot</title>
+    <style>
+      html, body {
+        box-sizing: border-box;
+        display: flow-root;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+      }
+    </style>
+    <script type="text/javascript" src="https://cdn.bokeh.org/bokeh/release/bokeh-3.7.3.min.js"></script>
+    <script type="text/javascript">
+        Bokeh.set_log_level("info");
+    </script>
+  </head>
+  <body>
+    <div id="d5dd7218-9b51-45df-a0ab-cfd06309f8a0" data-root-id="p1006" style="display: contents;"></div>
+  
+    <script type="application/json" id="ef85c0b2-d712-4bbd-b020-f0a25d5b2d79">
+      {"56887f44-eb77-4e8a-806f-4a889f5fc5d9":{"version":"3.7.3","title":"Bokeh Application","roots":[{"type":"object","name":"Figure","id":"p1006","attributes":{"width":800,"x_range":{"type":"object","name":"FactorRange","id":"p1016","attributes":{"factors":["MIDDLESEX","CAMDEN","ESSEX","BURLINGTON","OCEAN","MONMOUTH","ATLANTIC","UNION","GLOUCESTER","BERGEN","CUMBERLAND","HUDSON","MERCER","PASSAIC","MORRIS","SOMERSET","HUNTERDON","SALEM","SUSSEX","CAPE MAY","WARREN"]}},"y_range":{"type":"object","name":"DataRange1d","id":"p1008","attributes":{"start":0}},"x_scale":{"type":"object","name":"CategoricalScale","id":"p1017"},"y_scale":{"type":"object","name":"LinearScale","id":"p1018"},"title":{"type":"object","name":"Title","id":"p1009","attributes":{"text":"Total Death by County"}},"renderers":[{"type":"object","name":"GlyphRenderer","id":"p1038","attributes":{"data_source":{"type":"object","name":"ColumnDataSource","id":"p1029","attributes":{"selected":{"type":"object","name":"Selection","id":"p1030","attributes":{"indices":[],"line_indices":[]}},"selection_policy":{"type":"object","name":"UnionRenderers","id":"p1031"},"data":{"type":"map","entries":[["index",{"type":"ndarray","array":{"type":"bytes","data":"AAAAAAEAAAACAAAAAwAAAAQAAAAFAAAABgAAAAcAAAAIAAAACQAAAAoAAAALAAAADAAAAA0AAAAOAAAADwAAABAAAAARAAAAEgAAABMAAAAUAAAA"},"shape":[21],"dtype":"int32","order":"little"}],["County Name",{"type":"ndarray","array":["MIDDLESEX","CAMDEN","ESSEX","BURLINGTON","OCEAN","MONMOUTH","ATLANTIC","UNION","GLOUCESTER","BERGEN","CUMBERLAND","HUDSON","MERCER","PASSAIC","MORRIS","SOMERSET","HUNTERDON","SALEM","SUSSEX","CAPE MAY","WARREN"],"shape":[21],"dtype":"object","order":"little"}],["Total Killed",{"type":"ndarray","array":{"type":"bytes","data":"tgAAAK0AAACqAAAAoQAAAKAAAACDAAAAdQAAAG4AAABmAAAAZQAAAGMAAABXAAAAVQAAAEsAAABIAAAAPAAAACgAAAAoAAAAIwAAACAAAAAdAAAA"},"shape":[21],"dtype":"int32","order":"little"}]]}}},"view":{"type":"object","name":"CDSView","id":"p1039","attributes":{"filter":{"type":"object","name":"AllIndices","id":"p1040"}}},"glyph":{"type":"object","name":"VBar","id":"p1035","attributes":{"x":{"type":"field","field":"County Name"},"width":{"type":"value","value":0.8},"top":{"type":"field","field":"Total Killed"},"line_color":{"type":"value","value":"#1f77b4"},"fill_color":{"type":"value","value":"#1f77b4"}}},"nonselection_glyph":{"type":"object","name":"VBar","id":"p1036","attributes":{"x":{"type":"field","field":"County Name"},"width":{"type":"value","value":0.8},"top":{"type":"field","field":"Total Killed"},"line_color":{"type":"value","value":"#1f77b4"},"line_alpha":{"type":"value","value":0.1},"fill_color":{"type":"value","value":"#1f77b4"},"fill_alpha":{"type":"value","value":0.1},"hatch_alpha":{"type":"value","value":0.1}}},"muted_glyph":{"type":"object","name":"VBar","id":"p1037","attributes":{"x":{"type":"field","field":"County Name"},"width":{"type":"value","value":0.8},"top":{"type":"field","field":"Total Killed"},"line_color":{"type":"value","value":"#1f77b4"},"line_alpha":{"type":"value","value":0.2},"fill_color":{"type":"value","value":"#1f77b4"},"fill_alpha":{"type":"value","value":0.2},"hatch_alpha":{"type":"value","value":0.2}}}}}],"toolbar":{"type":"object","name":"Toolbar","id":"p1015"},"toolbar_location":null,"left":[{"type":"object","name":"LinearAxis","id":"p1024","attributes":{"ticker":{"type":"object","name":"BasicTicker","id":"p1025","attributes":{"mantissas":[1,2,5]}},"formatter":{"type":"object","name":"BasicTickFormatter","id":"p1026"},"major_label_policy":{"type":"object","name":"AllLabels","id":"p1027"}}}],"below":[{"type":"object","name":"CategoricalAxis","id":"p1019","attributes":{"ticker":{"type":"object","name":"CategoricalTicker","id":"p1020"},"formatter":{"type":"object","name":"CategoricalTickFormatter","id":"p1021"},"major_label_orientation":"vertical","major_label_policy":{"type":"object","name":"AllLabels","id":"p1022"}}}],"center":[{"type":"object","name":"Grid","id":"p1023","attributes":{"axis":{"id":"p1019"},"grid_line_color":null}},{"type":"object","name":"Grid","id":"p1028","attributes":{"dimension":1,"axis":{"id":"p1024"}}}]}}]}}
+    </script>
+    <script type="text/javascript">
+      (function() {
+        const fn = function() {
+          Bokeh.safely(function() {
+            (function(root) {
+              function embed_document(root) {
+              const docs_json = document.getElementById('ef85c0b2-d712-4bbd-b020-f0a25d5b2d79').textContent;
+              const render_items = [{"docid":"56887f44-eb77-4e8a-806f-4a889f5fc5d9","roots":{"p1006":"d5dd7218-9b51-45df-a0ab-cfd06309f8a0"},"root_ids":["p1006"]}];
+              root.Bokeh.embed.embed_items(docs_json, render_items);
+              }
+              if (root.Bokeh !== undefined) {
+                embed_document(root);
+              } else {
+                let attempts = 0;
+                const timer = setInterval(function(root) {
+                  if (root.Bokeh !== undefined) {
+                    clearInterval(timer);
+                    embed_document(root);
+                  } else {
+                    attempts++;
+                    if (attempts > 100) {
+                      clearInterval(timer);
+                      console.log("Bokeh: ERROR: Unable to run BokehJS code because BokehJS library is missing");
+                    }
+                  }
+                }, 10, root)
+              }
+            })(window);
+          });
+        };
+        if (document.readyState != "loading") fn();
+        else document.addEventListener("DOMContentLoaded", fn);
+      })();
+    </script>
+  </body>
+</html>
