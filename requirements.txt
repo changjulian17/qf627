@@ -1,0 +1,17 @@
+# For Python 3.9 environment
+
+# Core Data Manipulation
+numpy
+pandas
+
+# Plotting Libraries
+matplotlib
+lets-plot
+
+# Financial Data Libraries
+yfinance
+pandas-datareader
+
+# Statistical Modeling and Machine Learning
+statsmodels
+scikit-learn

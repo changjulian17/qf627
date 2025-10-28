@@ -1,0 +1,12 @@
+data wrangling
+
+rule based a-z
+
+supervised
+
+unsupervised 
+- PCA, 
+- tSNE
+- kmeans clustering 
+- algo clustering
+- aglomorative nesting
