@@ -8,5 +8,5 @@ unsupervised
 - PCA, 
 - tSNE
 - kmeans clustering 
-- algo clustering
-- aglomorative nesting
+- agglomorative nesting -> each node is a portfolio of stock(s)
+- draw dendogram, understand clusters from table
