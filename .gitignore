@@ -11,6 +11,8 @@ __pycache__/
 .vscode/
 # MacOS system files
 .DS_Store
+# ML model checkpoints
+checkpoints/
 
 *.csv
 Lesson 10/QF627-G3-Programming and Computational Finance - 1142025 - 906 PM.zip
