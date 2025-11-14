@@ -11,7 +11,8 @@ from pathlib import Path
 from config import *
 from data.data_loader import DataLoader
 from strategies.mean_reversion import RSIStrategy, ZScoreStrategy, generate_rsi_variants
-from strategies.momentum import SMAStrategy, MACDStrategy
+from strategies.momentum import SMAStrategy, MACDStrategy, StochasticStrategy, ROCStrategy
+from strategies.volume_based import OBVStrategy
 from strategies.coincident_indices import CoincidentIndexStrategy, MultiCoincidentStrategy
 from strategies.multi_window_returns import MultiWindowReturnsStrategy, CrossAssetWindowReturnsStrategy
 from backtesting.backtest_engine import BacktestEngine
@@ -147,7 +148,9 @@ def init_strategies(prices: pd.DataFrame, test_start_date=None):
     for short, long in MOMENTUM_PARAMS['sma_short_long_pairs']:
         strategies.append(SMAStrategy(prices, short, long))
 
-    strategies.append(MACDStrategy(prices, *MOMENTUM_PARAMS['macd_params']))
+    # Create multiple MACD strategies with different parameters
+    for fast, slow, signal in MOMENTUM_PARAMS['macd_params']:
+        strategies.append(MACDStrategy(prices, fast, slow, signal))
 
     strategies.append(ZScoreStrategy(prices,
                                      MEAN_REVERSION_PARAMS['zscore_window'],
@@ -159,6 +162,34 @@ def init_strategies(prices: pd.DataFrame, test_start_date=None):
         threshold_pairs=MEAN_REVERSION_PARAMS.get('rsi_threshhold_pairs')
     )
     strategies.extend(rsi_variants)
+    
+    # Add volume and oscillator strategies
+    if VOLUME_OSCILLATOR_PARAMS.get('enabled', False):
+        # OBV strategies
+        for ticker, window in VOLUME_OSCILLATOR_PARAMS.get('obv', []):
+            try:
+                obv_strat = OBVStrategy(prices, ticker, window)
+                strategies.append(obv_strat)
+            except Exception as e:
+                print(f"Warning: Could not create OBVStrategy for {ticker}: {e}")
+        
+        # Stochastic oscillator strategies
+        for ticker, k_period, d_period, oversold, overbought in VOLUME_OSCILLATOR_PARAMS.get('stochastic', []):
+            try:
+                stoch_strat = StochasticStrategy(
+                    prices, ticker, k_period, d_period, oversold, overbought
+                )
+                strategies.append(stoch_strat)
+            except Exception as e:
+                print(f"Warning: Could not create StochasticStrategy for {ticker}: {e}")
+        
+        # ROC strategies
+        for period, threshold in VOLUME_OSCILLATOR_PARAMS.get('roc', []):
+            try:
+                roc_strat = ROCStrategy(prices, period, threshold)
+                strategies.append(roc_strat)
+            except Exception as e:
+                print(f"Warning: Could not create ROCStrategy: {e}")
     
     # Add coincident indices strategies
     if COINCIDENT_INDICES_PARAMS.get('enabled', False):
@@ -182,7 +213,8 @@ def init_strategies(prices: pd.DataFrame, test_start_date=None):
                     prices,
                     coincident_tickers=tickers,
                     window=window,
-                    aggregation=aggregation
+                    aggregation=aggregation,
+                    include_individual_features=False  # Avoid redundancy with single strategies
                 )
                 strategies.append(multi_coinc_strat)
             except Exception as e:

@@ -80,6 +80,13 @@ class CoincidentIndexStrategy(BaseStrategy):
         self.data[f'{self.coincident_ticker}_price'] = self.coincident_data
         self.data[f'{self.coincident_ticker}_signal'] = coincident_signal
         
+        # Add z-score of price for ML features (stationary version)
+        from features.technical_indicators import TechnicalIndicators
+        ti = TechnicalIndicators()
+        self.data[f'{self.coincident_ticker}_price_zscore'] = ti.calculate_zscore(
+            self.coincident_data, window=self.window
+        )
+        
         # Generate positions: long when coincident index momentum is positive, short when negative
         self.positions = pd.Series(
             np.where(coincident_signal > self.correlation_threshold, 1, -1),
@@ -100,15 +107,18 @@ class MultiCoincidentStrategy(BaseStrategy):
     """Strategy combining multiple coincident indices.
     
     Aggregates signals from multiple correlated assets to generate a composite signal.
+    Can also optionally exclude individual ticker features to avoid redundancy.
     """
     
-    def __init__(self, data, coincident_tickers, window=20, aggregation='mean', name_suffix=""):
+    def __init__(self, data, coincident_tickers, window=20, aggregation='mean', 
+                 include_individual_features=True, name_suffix=""):
         """
         Args:
             data: Price DataFrame for primary asset
             coincident_tickers: List of ticker symbols for coincident indices
             window: Lookback window for calculating signals
             aggregation: How to combine signals ('mean', 'sum', 'majority')
+            include_individual_features: If False, only composite_signal is kept for ML features
             name_suffix: Optional suffix for strategy name
         """
         tickers_str = '_'.join([t.replace('^', '').replace('-', '')[:3] for t in coincident_tickers])
@@ -117,6 +127,7 @@ class MultiCoincidentStrategy(BaseStrategy):
         self.coincident_tickers = coincident_tickers
         self.window = window
         self.aggregation = aggregation
+        self.include_individual_features = include_individual_features
         
     def fetch_coincident_data(self, start_date, end_date):
         """Fetch data for all coincident indices."""
@@ -171,9 +182,18 @@ class MultiCoincidentStrategy(BaseStrategy):
             # Convert to position: 1 if positive momentum, -1 if negative
             signals[ticker] = np.where(signal > 0, 1, -1)
             
-            # Store raw data
-            self.data[f'{ticker}_price'] = coincident_df[ticker]
-            self.data[f'{ticker}_signal'] = signal
+            # Only store individual features if requested (avoid redundancy with CoincidentIndexStrategy)
+            if self.include_individual_features:
+                # Store raw data
+                self.data[f'{ticker}_price'] = coincident_df[ticker]
+                self.data[f'{ticker}_signal'] = signal
+                
+                # Add z-score of price for ML features (stationary version)
+                from features.technical_indicators import TechnicalIndicators
+                ti = TechnicalIndicators()
+                self.data[f'{ticker}_price_zscore'] = ti.calculate_zscore(
+                    coincident_df[ticker], window=self.window
+                )
         
         # Aggregate signals
         if self.aggregation == 'mean':

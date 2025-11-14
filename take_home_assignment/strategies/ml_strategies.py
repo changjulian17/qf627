@@ -13,8 +13,9 @@ from sklearn.neighbors import KNeighborsRegressor
 from sklearn.tree import DecisionTreeRegressor
 from sklearn.model_selection import GridSearchCV
 from xgboost import XGBRegressor
-from typing import Optional, Any
-from config import ML_HYPERPARAMETER_GRIDS, ML_PARAMS
+from typing import Optional, Any    
+from features.technical_indicators import zscore
+from config import ML_HYPERPARAMETER_GRIDS, ML_PARAMS, ZSCORE_WINDOW
 
 
 class MLStrategy:
@@ -176,11 +177,42 @@ def build_ml_features_from_strategies(prices: pd.DataFrame, strategies: list):
             pass
 
         df = strat.data.copy()
-        # pick numeric columns that look like indicators (exclude common return/position cols)
-        exclude = {"strategy_returns", "cum_strategy_returns", "passive_returns", "cum_passive_returns", "position", "trades"}
-        indicator_cols = [c for c in df.select_dtypes(include=["number"]).columns if c not in exclude]
+        # Exclude: returns, positions, trades, Close (redundant with price)
+        # Also exclude raw SMAs/EMAs (they're trending - only keep normalized spreads)
+        # Also exclude price column from each strategy (trending, use price_zscore instead)
+        # Also exclude individual window returns (redundant across strategies - keep only signals)
+        exclude = {
+            "strategy_returns", "cum_strategy_returns", "passive_returns", 
+            "cum_passive_returns", "position", "trades", "Close", "positions"
+        }
+        
+        # Get the price column name (first column in prices DataFrame)
+        price_col = prices.columns[0] if len(prices.columns) > 0 else 'price'
+        
+        indicator_cols = []
+        for c in df.select_dtypes(include=["number"]).columns:
+            if c in exclude:
+                continue
+            # Exclude price column (trending, we'll use price_zscore instead)
+            if c == price_col:
+                continue
+            # Exclude raw SMA/EMA columns (keep only normalized spreads/z-scores)
+            if c.startswith('sma_') or c.startswith('ema_'):
+                continue
+            # Exclude raw coincident index prices (they're trending)
+            # Keep _price_zscore columns (already normalized in strategy)
+            if c.endswith('_price'):
+                continue
+            # Exclude individual window returns (redundant - keep only aggregated signals)
+            # These returns appear multiple times across different multi-window strategies
+            if c.startswith('ret_') or c.endswith('_ret_5d') or c.endswith('_ret_10d') or \
+               c.endswith('_ret_20d') or c.endswith('_ret_60d'):
+                continue
+            indicator_cols.append(c)
+        
         if indicator_cols:
             tmp = df[indicator_cols].copy()
+            
             # prefix columns with strategy name to avoid collisions
             tmp.columns = [f"{strat.name}__{c}" for c in tmp.columns]
             feature_frames.append(tmp)
@@ -188,14 +220,17 @@ def build_ml_features_from_strategies(prices: pd.DataFrame, strategies: list):
     if not feature_frames:
         return pd.DataFrame(index=prices.index), pd.Series(dtype=float)
 
-    X = pd.concat(feature_frames + [prices.copy().rename(columns={prices.columns[0]: 'price'})], axis=1).sort_index()
-    print(f"Built ML feature set with {X.shape[1]-1} features from {len(strategies)} strategies.")
+    # Add normalized price (z-score) instead of raw price
+    price_series = prices[prices.columns[0]]
+    price_zscore = zscore(price_series, window=ZSCORE_WINDOW)
+    price_df = pd.DataFrame({'price_zscore': price_zscore}, index=prices.index)
+    
+    X = pd.concat(feature_frames + [price_df], axis=1).sort_index()
+    print(f"Built ML feature set with {X.shape[1]} features from {len(strategies)} strategies.")
     print(f"Feature names: {X.columns.tolist()}")
 
-    # compute passive (log) returns and forward return as target
-    price_series = X['price'].squeeze()
+    # compute forward return as target (using original price for returns calculation)
     log_ret = np.log(price_series / price_series.shift(1))
-    # forward return (predict next period)
     y = log_ret.shift(-1).rename('fwd_log_ret')
 
     # drop rows with NaNs in features or target
