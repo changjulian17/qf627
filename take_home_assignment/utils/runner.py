@@ -18,6 +18,8 @@ from strategies.multi_window_returns import MultiWindowReturnsStrategy, CrossAss
 from backtesting.backtest_engine import BacktestEngine
 from backtesting.metrics import PerformanceMetrics
 from strategies.ml_strategies import create_ml_models, MLStrategy
+from visualisation.plotting import plot_top_strategy_vs_benchmark, plot_top_n_strategies_vs_benchmark
+import re
 
 
 def create_ml_strategies(prices: pd.DataFrame, strategies: list, test_start_date, 
@@ -41,7 +43,9 @@ def create_ml_strategies(prices: pd.DataFrame, strategies: list, test_start_date
     
     # Load checkpoint if exists
     checkpoint_file = checkpoint_path / 'ml_strategies_checkpoint.pkl'
+    best_params_file = checkpoint_path / 'ml_best_params.pkl'
     completed_models = set()
+    saved_best_params = {}
     
     if checkpoint_file.exists():
         try:
@@ -56,7 +60,22 @@ def create_ml_strategies(prices: pd.DataFrame, strategies: list, test_start_date
             ml_strategies = []
             completed_models = set()
     
-    ml_models = create_ml_models(tune_hyperparameters=tune_hyperparameters)
+    # Load saved best parameters if available
+    if best_params_file.exists():
+        try:
+            with open(best_params_file, 'rb') as f:
+                saved_best_params = pickle.load(f)
+            print(f"✓ Loaded {len(saved_best_params)} saved hyperparameter configurations")
+            # If we have saved params, we can skip tuning
+            if saved_best_params and tune_hyperparameters:
+                print("  → Using saved best parameters, skipping hyperparameter tuning")
+                tune_hyperparameters = False
+        except Exception as e:
+            print(f"Warning: Could not load saved parameters: {e}")
+            saved_best_params = {}
+    
+    ml_models = create_ml_models(tune_hyperparameters=tune_hyperparameters, 
+                                  saved_best_params=saved_best_params)
     
     tuning_msg = " with hyperparameter tuning" if tune_hyperparameters else ""
     print(f"\nCreating ML strategies{tuning_msg}...")
@@ -83,8 +102,9 @@ def create_ml_strategies(prices: pd.DataFrame, strategies: list, test_start_date
                 ml_strategies.append(ml_strat)
                 completed_models.add(model_name)
                 
-                # Print best params if tuned
-                if tune_hyperparameters and hasattr(ml_strat.model, 'best_params_'):
+                # Extract and save best params if tuned
+                if hasattr(ml_strat.model, 'best_params_'):
+                    saved_best_params[model_name] = ml_strat.model.best_params_
                     print(f"✓ {ml_strat.name}: best_params={ml_strat.model.best_params_}")
                 else:
                     print(f"✓ {ml_strat.name}")
@@ -98,6 +118,12 @@ def create_ml_strategies(prices: pd.DataFrame, strategies: list, test_start_date
                     }
                     with open(checkpoint_file, 'wb') as f:
                         pickle.dump(checkpoint_data, f)
+                    
+                    # Save best parameters separately
+                    if saved_best_params:
+                        with open(best_params_file, 'wb') as f:
+                            pickle.dump(saved_best_params, f)
+                    
                     print(f"  → Checkpoint saved ({len(completed_models)}/{total_models} complete)")
                 except Exception as e:
                     print(f"  Warning: Could not save checkpoint: {e}")
@@ -107,11 +133,12 @@ def create_ml_strategies(prices: pd.DataFrame, strategies: list, test_start_date
             print(f"✗ Could not create {model_name} strategy: {e}")
             print(f"  → Progress saved. You can resume by running again.")
     
-    # Remove checkpoint file when all done
+    # Remove checkpoint file when all done (but keep best_params for future runs)
     if len(completed_models) == total_models and checkpoint_file.exists():
         try:
             checkpoint_file.unlink()
             print(f"\n✓ All models complete! Checkpoint file removed.")
+            print(f"✓ Best hyperparameters saved to: {best_params_file}")
         except Exception as e:
             print(f"Warning: Could not remove checkpoint file: {e}")
     
@@ -214,7 +241,8 @@ def init_strategies(prices: pd.DataFrame, test_start_date=None):
                     coincident_tickers=tickers,
                     window=window,
                     aggregation=aggregation,
-                    include_individual_features=False  # Avoid redundancy with single strategies
+                    include_individual_features=False,  # Avoid redundancy with single strategies
+                    correlation_window=MULTI_WINDOW_PARAMS.get('correlation_window', 60)
                 )
                 strategies.append(multi_coinc_strat)
             except Exception as e:
@@ -278,9 +306,15 @@ def run_backtests_on_test_period(strategies, test_start_date):
 
         bt_data, final_value, total_return = backtest_engine.run_backtest(test_data)
 
+        # Check if this is an ML strategy with MSE metrics
+        train_mse = getattr(strategy, 'train_mse', None)
+        test_mse = getattr(strategy, 'test_mse', None)
+
         metrics = PerformanceMetrics.calculate_all_metrics(
             bt_data['strategy_returns'],
-            bt_data['cum_strategy_returns']
+            bt_data['cum_strategy_returns'],
+            train_mse=train_mse,
+            test_mse=test_mse
         )
 
         results[strategy.name] = {
@@ -337,9 +371,12 @@ def compute_spy_benchmark(test_start_date):
 def save_and_print_results(results: dict):
     """Build comparison DataFrame from results, print and save to CSV.
 
-    Returns the comparison DataFrame.
+    Returns the comparison DataFrame sorted by Total Return (descending).
     """
     comparison_df = pd.DataFrame({name: res['metrics'] for name, res in results.items()}).T
+    
+    # Sort by Total Return in descending order
+    comparison_df = comparison_df.sort_values('Total Return', ascending=False)
 
     print("\n" + "="*80)
     print("STRATEGY COMPARISON")
@@ -349,6 +386,56 @@ def save_and_print_results(results: dict):
     comparison_df.to_csv('strategy_comparison.csv')
     print("\nResults saved to strategy_comparison.csv")
     return comparison_df
+
+
+def save_detailed_results(results: dict, out_dir: str = "results"):
+    """Save per-strategy backtest DataFrames and a summary CSV for diagnostics.
+
+    - Writes each strategy's bt_data to results/strategy_data/<strategy>.csv
+    - Writes results/summary.csv with final_value, total_return, and metrics.
+    """
+    out_path = Path(out_dir)
+    data_dir = out_path / "strategy_data"
+    out_path.mkdir(parents=True, exist_ok=True)
+    data_dir.mkdir(parents=True, exist_ok=True)
+
+    def safe_name(name: str) -> str:
+        # Replace any character that's not alnum, dash, underscore, dot with underscore
+        return re.sub(r"[^A-Za-z0-9._\-]+", "_", name)[:200]
+
+    summary_rows = []
+    for name, res in results.items():
+        bt_data = res.get('data')
+        final_value = res.get('final_value')
+        total_return = res.get('total_return')
+        metrics = res.get('metrics', {}) or {}
+
+        # Save per-strategy data if available
+        if isinstance(bt_data, pd.DataFrame) and not bt_data.empty:
+            file_path = data_dir / f"{safe_name(name)}.csv"
+            try:
+                bt_data.to_csv(file_path, index_label='date')
+            except Exception as e:
+                print(f"Warning: Failed to save data for {name}: {e}")
+
+        # Build summary row
+        row = {
+            'strategy': name,
+            'final_value': final_value,
+            'total_return_pct': total_return,
+        }
+        # Merge metrics (ensure flat dict)
+        if isinstance(metrics, dict):
+            row.update(metrics)
+        summary_rows.append(row)
+
+    # Save summary CSV
+    try:
+        summary_df = pd.DataFrame(summary_rows)
+        summary_df.to_csv(out_path / 'summary.csv', index=False)
+        print(f"Detailed results saved to: {out_path.resolve()} (data + summary.csv)")
+    except Exception as e:
+        print(f"Warning: Failed to save summary CSV: {e}")
 
 
 def run_all():
@@ -366,5 +453,9 @@ def run_all():
         }
 
     comparison_df = save_and_print_results(results)
+    # Persist detailed artifacts for diagnostics
+    _out_dir = globals().get('RESULTS_OUTPUT_DIR', 'results')
+    save_detailed_results(results, out_dir=_out_dir)
     return results, comparison_df
+
 

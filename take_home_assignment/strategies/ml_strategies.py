@@ -45,6 +45,8 @@ class MLStrategy:
         self.threshold = threshold
         self.data = None
         self._trained = False
+        self.train_mse = None
+        self.test_mse = None
         
     def fit(self, X: pd.DataFrame, y: pd.Series):
         """Train the underlying model."""
@@ -93,29 +95,46 @@ class MLStrategy:
         
         # Predict on full period where features exist
         preds = self.predict(X)
+        
+        # Calculate MSE for train and test sets
+        X_test = X.loc[X.index >= self.test_start_date]
+        y_test = y.loc[y.index >= self.test_start_date]
+        
+        train_preds = self.predict(X_train)
+        test_preds = self.predict(X_test)
+        
+        self.train_mse = ((y_train - train_preds) ** 2).mean()
+        self.test_mse = ((y_test - test_preds) ** 2).mean()
+        
         signals = self.signals_from_preds(preds)
         
         # Build data DataFrame matching other strategies
         price_col = self.prices.columns[0]
         self.data = pd.DataFrame({price_col: self.prices[price_col].reindex(X.index)})
         self.data['passive_returns'] = np.log(self.data[price_col] / self.data[price_col].shift(1)).fillna(0)
-        self.data['position'] = signals.reindex(self.data.index).fillna(0)
-        self.data['strategy_returns'] = self.data['position'].shift(1).fillna(0) * self.data['passive_returns']
+        # Standardize on 'positions' (plural) across all strategies
+        self.data['positions'] = signals.reindex(self.data.index).fillna(0)
+        self.data['strategy_returns'] = self.data['positions'].shift(1).fillna(0) * self.data['passive_returns']
         # Cumulative returns: cumulative product of exp(log_returns)
         self.data['cum_passive_returns'] = self.data['passive_returns'].cumsum().apply(np.exp)
         self.data['cum_strategy_returns'] = self.data['strategy_returns'].cumsum().apply(np.exp)
-        self.data['trades'] = self.data['position'].diff().abs().fillna(0)
+        self.data['trades'] = self.data['positions'].diff().abs().fillna(0)
 
 
-def create_ml_models(tune_hyperparameters=False):
+def create_ml_models(tune_hyperparameters=False, saved_best_params=None):
     """Create a dictionary of ML models for strategy testing.
     
     Args:
         tune_hyperparameters: If True, returns GridSearchCV wrapped models for tuning.
                              If False, returns models with default parameters.
+        saved_best_params: Dict mapping model names to their best parameters from previous runs.
+                          If provided, these params will be used instead of tuning.
     
     Returns a dict with model_name -> (model_instance, short_name) pairs.
     """
+    if saved_best_params is None:
+        saved_best_params = {}
+    
     random_seed = ML_PARAMS.get('random_seed', 42)
     
     base_models = {
@@ -132,29 +151,34 @@ def create_ml_models(tune_hyperparameters=False):
         'Adaptive Boosting': (AdaBoostRegressor(random_state=random_seed), 'AdaBoost'),
     }
     
-    
-    if not tune_hyperparameters:
-        return base_models
-    
-    # Wrap models with GridSearchCV for hyperparameter tuning
     tuned_models = {}
     
     for model_name, (model, short_name) in base_models.items():
-        param_grid = ML_HYPERPARAMETER_GRIDS.get(model_name, {})
-        
-        if param_grid:
-            # Use GridSearchCV with 3-fold CV, optimize for negative MSE
-            grid_search = GridSearchCV(
-                estimator=model,
-                param_grid=param_grid,
-                cv=3,
-                scoring='neg_mean_squared_error',
-                n_jobs=ML_PARAMS.get('n_jobs', -1),
-                verbose=0
-            )
-            tuned_models[model_name] = (grid_search, short_name)
+        # Check if we have saved best params for this model
+        if model_name in saved_best_params:
+            print(f"  → Using saved best params for {model_name}: {saved_best_params[model_name]}")
+            model.set_params(**saved_best_params[model_name])
+            tuned_models[model_name] = (model, short_name)
+        elif tune_hyperparameters:
+            # Only tune if we don't have saved params
+            param_grid = ML_HYPERPARAMETER_GRIDS.get(model_name, {})
+            
+            if param_grid:
+                # Use GridSearchCV with 3-fold CV, optimize for negative MSE
+                grid_search = GridSearchCV(
+                    estimator=model,
+                    param_grid=param_grid,
+                    cv=3,
+                    scoring='neg_mean_squared_error',
+                    n_jobs=ML_PARAMS.get('n_jobs', -1),
+                    verbose=0
+                )
+                tuned_models[model_name] = (grid_search, short_name)
+            else:
+                # No hyperparameters to tune (e.g., LinearRegression)
+                tuned_models[model_name] = (model, short_name)
         else:
-            # No hyperparameters to tune (e.g., LinearRegression)
+            # No tuning, just use default params
             tuned_models[model_name] = (model, short_name)
     
     return tuned_models
@@ -195,6 +219,9 @@ def build_ml_features_from_strategies(prices: pd.DataFrame, strategies: list):
                 continue
             # Exclude price column (trending, we'll use price_zscore instead)
             if c == price_col:
+                continue
+            # Exclude correlation/weight diagnostic columns from multi-coincident strategies
+            if c.endswith('_correlation') or c.endswith('_weight'):
                 continue
             # Exclude raw SMA/EMA columns (keep only normalized spreads/z-scores)
             if c.startswith('sma_') or c.startswith('ema_'):

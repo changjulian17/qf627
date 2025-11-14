@@ -2,7 +2,7 @@
 import pandas as pd
 import numpy as np
 from config import *
-from runner import init_strategies
+from .runner import init_strategies
 
 # Create sample price data
 np.random.seed(42)

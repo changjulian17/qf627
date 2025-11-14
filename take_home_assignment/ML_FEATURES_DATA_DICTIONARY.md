@@ -1,8 +1,47 @@
 # ML Features Data Dictionary
 
-**Total Features:** 130 stationary features for machine learning models
+**Project:** QF627 Take-Home Assignment - Trading Strategy Backtesting System
+
+**Total Features:** 167 stationary features for machine learning models
+
+**Total Strategies:** 91 rule-based strategies generating features
 
 **Last Updated:** November 14, 2025
+
+---
+
+## Overview
+
+This document describes all machine learning features used in the ML-based trading strategies. All features are engineered to be **stationary** (mean-reverting, no unit root) to improve model performance and prevent overfitting to trending data.
+
+The features are derived from **91 rule-based strategies** across multiple categories:
+- **Technical indicators** (11 strategies: MACD, RSI, SMA, Z-Score)
+- **Volume & oscillators** (7 strategies: OBV, Stochastic, ROC)
+- **Coincident indices** (69 strategies: cross-asset correlations)
+- **Multi-window returns** (4 strategies: aggregated signals across timeframes)
+
+All non-stationary features (e.g., raw prices) are transformed using:
+- **Z-score normalization** - Centers data with zero mean, unit variance
+- **Percentage returns** - Daily/periodic price changes
+- **Spread ratios** - Normalized price differences
+
+### Feature Breakdown by Type
+
+| Feature Type | Count | Percentage |
+|-------------|-------|------------|
+| Coincident Signals (Returns) | 69 | 41.3% |
+| Coincident Price Z-Scores | 66 | 39.5% |
+| Aggregated Signals | 7 | 4.2% |
+| RSI | 4 | 2.4% |
+| Stochastic Oscillator | 4 | 2.4% |
+| SMA Spread Z-Scores | 3 | 1.8% |
+| MACD (Z-Score Normalized) | 3 | 1.8% |
+| Z-Score Indicators | 3 | 1.8% |
+| ROC (Rate of Change) | 3 | 1.8% |
+| Volume (Raw) | 2 | 1.2% |
+| Other | 2 | 1.2% |
+| Price Z-Score (Global) | 1 | 0.6% |
+| **Total** | **167** | **100%** |
 
 ---
 
@@ -331,47 +370,106 @@ All features are made stationary through one of these methods:
 ## Usage Recommendations
 
 ### For Regression Models
-- Use all 130 features
+- Use all 167 features
 - Target: `fwd_log_ret` (continuous)
 - Convert predictions to positions: long if pred > 0, short if pred < 0
 
 ### For Classification Models
 - Bin target into classes: {-1: negative return, 0: ~zero return, 1: positive return}
-- Use all 130 features
+- Use all 167 features
 - Directly predict position {-1, 0, 1}
 
 ### Feature Selection
 **High-Information Features:**
-- `price_zscore`: Core momentum
-- Coincident price z-scores: Cross-asset regime detection
-- Multi-window returns: Multi-timeframe momentum
+- `price_zscore`: Core momentum indicator
+- Coincident price z-scores (66 features): Cross-asset regime detection
+- Coincident signals (69 features): Cross-asset momentum
+- Multi-window returns: Multi-timeframe momentum aggregation
 - RSI/Stochastic: Overbought/oversold conditions
 
 **Correlation Groups** (consider dimensionality reduction):
 - Multiple RSI configurations (4 features)
-- Multiple MACD configurations (6 features)
-- Sector ETFs (22 features) - high correlation within sectors
+- Multiple MACD configurations (6 features)  
+- Multiple Stochastic configurations (4 features)
+- Sector ETFs (11 sectors × 3 windows = 66 features) - high correlation within sectors
+- Currency pairs (4 currencies × 3 windows = 24 features)
+
+### Stationarity Verification
+
+All features are designed to be stationary:
+- ✅ **Bounded [0, 100]**: RSI (4), Stochastic (4)
+- ✅ **Z-scores ~[-3, 3]**: Price z-scores (67), MACD (6), OBV (2), SMA spreads (3)
+- ✅ **Returns/Signals**: Coincident signals (69), aggregated signals (7), returns (2)
+- ⚠️ **Volume (2)**: Raw volume features are non-stationary but provide context for OBV z-scores
 
 ---
 
-## Feature Statistics (Sample Data)
+## Current Feature Summary (As of November 14, 2025)
 
-Based on synthetic data (2020-2023):
-- **Sample Size**: 661 trading days
-- **Feature Means**: Mostly centered near 0 (z-scores) or 50 (oscillators)
-- **Feature Std Dev**: Z-scores ~1.0-1.5, oscillators ~10-30
-- **Feature Ranges**: 
-  - Z-scores: approximately [-3, 3]
-  - RSI/Stochastic: [0, 100]
-  - Returns: typically [-0.1, 0.1] for daily returns
+### By Strategy Category
+
+| Category | Strategies | Features | Description |
+|----------|-----------|----------|-------------|
+| **Technical Indicators** | 11 | 14 | MACD, RSI, SMA spreads, Z-Score |
+| **Volume & Oscillators** | 7 | 11 | OBV, Stochastic, ROC |
+| **Coincident Indices** | 69 | 135 | Cross-asset signals and price z-scores |
+| **Multi-Window Returns** | 4 | 6 | Aggregated multi-timeframe signals |
+| **Global Features** | 1 | 1 | SPY price z-score |
+| **Total** | **91** | **167** | All features |
+
+### Asset Coverage
+
+**Currencies (4):**
+- DX-Y.NYB (US Dollar Index)
+- EURUSD=X (Euro)
+- JPY=X (Japanese Yen)
+- GBPUSD=X (British Pound)
+
+**Market Indicators (2):**
+- ^VIX (Volatility Index)
+- ^TNX (10-Year Treasury Yield)
+
+**Commodities (3):**
+- GLD (Gold)
+- TLT (Long-Term Bonds)
+- USO (Oil)
+- UUP (US Dollar ETF)
+
+**Sector ETFs (11):**
+- XLK (Technology)
+- XLF (Financials)
+- XLV (Healthcare)
+- XLE (Energy)
+- XLI (Industrials)
+- XLP (Consumer Staples)
+- XLY (Consumer Discretionary)
+- XLU (Utilities)
+- XLRE (Real Estate)
+- XLB (Materials)
+- XLC (Communication Services)
+
+**Primary Asset:**
+- SPY (S&P 500 ETF)
+- QQQ (Nasdaq ETF) - in cross-asset features
+
+### Window Periods Used
+
+- **Short-term**: 5 days
+- **Medium-term**: 20 days (monthly)
+- **Long-term**: 252 days (yearly)
 
 ---
 
 ## Changelog
 
+**v2.0 - November 14, 2025**
+- Updated to 167 features (from 130)
+- Added 91 rule-based strategies generating features
+- Comprehensive asset coverage: 4 currencies, 11 sectors, 3 commodities, 2 market indicators
+- All features verified for stationarity
+- Detailed feature type breakdown added
+
 **v1.0 - November 14, 2025**
 - Initial data dictionary
-- 130 stationary features
-- Removed 45 duplicate price columns
-- All features transformed for stationarity
-- Currency indices (4) and market indices (17) fully integrated
+- 130 stationary features (outdated)
+- Basic feature engineering documented

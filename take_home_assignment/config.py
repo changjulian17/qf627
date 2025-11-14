@@ -15,6 +15,7 @@ ZSCORE_WINDOW = 200  # Window for z-score normalization of features (price, coin
 
 # Coincident index windows for multi-timeframe analysis
 COINCIDENT_WINDOWS = [5, 20, 252]  # Short, medium, and long-term momentum windows
+MULTI_COINCIDENT_WINDOW = 20  # Window for multi-coincident index strategies
 
 # Strategy parameters
 MOMENTUM_PARAMS = {
@@ -103,9 +104,11 @@ COINCIDENT_INDICES_PARAMS = {
     ],
     'multi_indices': [
         # All currency indices combined with mean aggregation
-        (list(CURRENCY_INDICES.values()), 20, 'mean'),
+        (list(CURRENCY_INDICES.values()), MULTI_COINCIDENT_WINDOW, 'mean'),
         # All market indices combined with majority vote
-        (list(MARKET_INDICES.values()), 20, 'majority'),
+        (list(MARKET_INDICES.values()), MULTI_COINCIDENT_WINDOW, 'majority'),
+        # All currency + market indices with correlation-weighted aggregation
+        (list(CURRENCY_INDICES.values()) + list(MARKET_INDICES.values()), MULTI_COINCIDENT_WINDOW, 'correlation_weighted'),
     ],
     'correlation_threshold': 0.0,
 }
@@ -113,9 +116,10 @@ COINCIDENT_INDICES_PARAMS = {
 # Multi-window returns strategy parameters
 MULTI_WINDOW_PARAMS = {
     'enabled': True,
+    'correlation_window': 60,  # Window for rolling correlation calculation (used in correlation_weighted aggregation)
     'same_asset_strategies': [
-        (COINCIDENT_WINDOWS, 'weighted_average'),  # Short, medium, long + extended term
-        (COINCIDENT_WINDOWS, 'majority_vote'),  # Short, medium, long term
+        (COINCIDENT_WINDOWS, 'weighted_average'),  # Short, medium, long-term weighted average
+        (COINCIDENT_WINDOWS, 'majority_vote'),  # Short, medium, long-term majority vote
     ],
     'cross_asset_strategies': [
         ('SPY', COINCIDENT_WINDOWS, 'weighted_average'),

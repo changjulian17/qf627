@@ -73,18 +73,21 @@ class CoincidentIndexStrategy(BaseStrategy):
         # Calculate returns for coincident index
         coincident_returns = np.log(self.coincident_data / self.coincident_data.shift(1))
         
-        # Calculate rolling mean return of coincident index
-        coincident_signal = coincident_returns.rolling(window=self.window).mean()
+        # FIX DATA LEAKAGE: Shift by 1 to use only PAST data
+        # Signal at time t should only use data up to time t-1 (not including t)
+        # This ensures we don't use today's close price (which isn't known until after market close)
+        coincident_signal = coincident_returns.shift(1).rolling(window=self.window).mean()
         
         # Store in data for analysis
         self.data[f'{self.coincident_ticker}_price'] = self.coincident_data
         self.data[f'{self.coincident_ticker}_signal'] = coincident_signal
         
         # Add z-score of price for ML features (stationary version)
+        # Also shift to avoid leakage
         from features.technical_indicators import TechnicalIndicators
         ti = TechnicalIndicators()
         self.data[f'{self.coincident_ticker}_price_zscore'] = ti.calculate_zscore(
-            self.coincident_data, window=self.window
+            self.coincident_data.shift(1), window=self.window
         )
         
         # Generate positions: long when coincident index momentum is positive, short when negative
@@ -111,14 +114,15 @@ class MultiCoincidentStrategy(BaseStrategy):
     """
     
     def __init__(self, data, coincident_tickers, window=20, aggregation='mean', 
-                 include_individual_features=True, name_suffix=""):
+                 include_individual_features=True, correlation_window=60, name_suffix=""):
         """
         Args:
             data: Price DataFrame for primary asset
             coincident_tickers: List of ticker symbols for coincident indices
             window: Lookback window for calculating signals
-            aggregation: How to combine signals ('mean', 'sum', 'majority')
+            aggregation: How to combine signals ('mean', 'sum', 'majority', 'correlation_weighted')
             include_individual_features: If False, only composite_signal is kept for ML features
+            correlation_window: Window for calculating correlations (used for 'correlation_weighted')
             name_suffix: Optional suffix for strategy name
         """
         tickers_str = '_'.join([t.replace('^', '').replace('-', '')[:3] for t in coincident_tickers])
@@ -128,6 +132,7 @@ class MultiCoincidentStrategy(BaseStrategy):
         self.window = window
         self.aggregation = aggregation
         self.include_individual_features = include_individual_features
+        self.correlation_window = correlation_window
         
     def fetch_coincident_data(self, start_date, end_date):
         """Fetch data for all coincident indices."""
@@ -171,16 +176,29 @@ class MultiCoincidentStrategy(BaseStrategy):
         # Align with primary data index
         coincident_df = coincident_df.reindex(self.data.index, method='ffill')
         
+        # Calculate SPY returns for correlation weighting
+        price_col = self.data.columns[0]  # First column is price
+        spy_returns = np.log(self.data[price_col] / self.data[price_col].shift(1))
+        
         # Calculate signals for each coincident index
         signals = pd.DataFrame(index=self.data.index)
+        correlations = pd.DataFrame(index=self.data.index)
         
         for ticker in coincident_df.columns:
             # Calculate returns
             returns = np.log(coincident_df[ticker] / coincident_df[ticker].shift(1))
-            # Rolling mean as signal
-            signal = returns.rolling(window=self.window).mean()
+            # FIX DATA LEAKAGE: Shift by 1 to use only PAST data
+            # Signal at time t should only use data up to time t-1
+            signal = returns.shift(1).rolling(window=self.window).mean()
             # Convert to position: 1 if positive momentum, -1 if negative
             signals[ticker] = np.where(signal > 0, 1, -1)
+            
+            # Calculate rolling correlation for weighting (also shifted to avoid leakage)
+            if self.aggregation == 'correlation_weighted':
+                # Use shifted returns to avoid leakage
+                corr = returns.shift(1).rolling(window=self.correlation_window).corr(spy_returns.shift(1))
+                # Use absolute correlation for weighting (both positive and negative correlations are useful)
+                correlations[ticker] = corr.abs()
             
             # Only store individual features if requested (avoid redundancy with CoincidentIndexStrategy)
             if self.include_individual_features:
@@ -189,10 +207,11 @@ class MultiCoincidentStrategy(BaseStrategy):
                 self.data[f'{ticker}_signal'] = signal
                 
                 # Add z-score of price for ML features (stationary version)
+                # Also shift to avoid leakage
                 from features.technical_indicators import TechnicalIndicators
                 ti = TechnicalIndicators()
                 self.data[f'{ticker}_price_zscore'] = ti.calculate_zscore(
-                    coincident_df[ticker], window=self.window
+                    coincident_df[ticker].shift(1), window=self.window
                 )
         
         # Aggregate signals
@@ -216,6 +235,20 @@ class MultiCoincidentStrategy(BaseStrategy):
             self.positions = pd.Series(
                 np.where(composite_signal > 0, 1, 
                         np.where(composite_signal < 0, -1, 0)),
+                index=self.data.index
+            )
+        elif self.aggregation == 'correlation_weighted':
+            # Weighted by historical correlation to SPY returns
+            # Normalize correlations to sum to 1 for each row (avoiding division by zero)
+            weights = correlations.div(correlations.sum(axis=1), axis=0)
+            weights = weights.fillna(1.0 / len(self.coincident_tickers))  # Equal weight if no correlation data
+            
+            # Weight the signals by correlation
+            weighted_signals = signals * weights
+            composite_signal = weighted_signals.sum(axis=1)
+            
+            self.positions = pd.Series(
+                np.where(composite_signal > 0, 1, -1),
                 index=self.data.index
             )
         else:
