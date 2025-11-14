@@ -288,6 +288,15 @@ def run_backtests_on_test_period(strategies, test_start_date):
     """Run backtests for each strategy restricted to the test period. Returns results dict."""
     results = {}
     backtest_engine = BacktestEngine(INITIAL_CAPITAL, COMMISSION_PER_TRADE)
+    
+    # Print test period information
+    print("\n" + "="*70)
+    print("TEST PERIOD INFORMATION")
+    print("="*70)
+    print(f"Test Start Date: {test_start_date.date()}")
+    print(f"Test End Date:   {END_DATE.date()}")
+    print(f"Duration:        {(END_DATE - test_start_date).days} days")
+    print("="*70)
 
     for strategy in strategies:
         print(f"\nBacktesting {strategy.name}...")
