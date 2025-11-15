@@ -149,7 +149,34 @@ def obv_normalized(close: pd.Series, volume: pd.Series, norm_window: int = 42) -
     return obv_zscore
 
 
-__all__ = ["sma", "ema", "macd", "macd_normalized", "zscore", "rsi", "stochastic_oscillator", "rate_of_change", "cumulative_volume", "on_balance_volume", "obv_normalized"]
+def bollinger_bands(series: pd.Series, window: int = 20, num_std: float = 2.0):
+    """Compute Bollinger Bands.
+    
+    Parameters
+    ----------
+    series : pd.Series
+        Price series (typically closing prices)
+    window : int
+        Rolling window for mean and standard deviation
+    num_std : float
+        Number of standard deviations for upper/lower bands
+    
+    Returns
+    -------
+    tuple of (middle_band, upper_band, lower_band)
+        middle_band: SMA of the price
+        upper_band: SMA + (num_std * rolling std)
+        lower_band: SMA - (num_std * rolling std)
+    """
+    middle_band = sma(series, window)
+    rolling_std = series.rolling(window=window, min_periods=int(window * 0.8)).std()
+    upper_band = middle_band + (num_std * rolling_std)
+    lower_band = middle_band - (num_std * rolling_std)
+    
+    return middle_band, upper_band, lower_band
+
+
+__all__ = ["sma", "ema", "macd", "macd_normalized", "zscore", "rsi", "stochastic_oscillator", "rate_of_change", "cumulative_volume", "on_balance_volume", "obv_normalized", "bollinger_bands"]
 
 
 class TechnicalIndicators:
@@ -203,5 +230,9 @@ class TechnicalIndicators:
     @staticmethod
     def calculate_obv_normalized(close: pd.Series, volume: pd.Series, norm_window: int = 42) -> pd.Series:
         return obv_normalized(close, volume, norm_window)
+    
+    @staticmethod
+    def calculate_bollinger_bands(series: pd.Series, window: int = 20, num_std: float = 2.0):
+        return bollinger_bands(series, window, num_std)
 
 __all__.append("TechnicalIndicators")

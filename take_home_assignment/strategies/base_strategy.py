@@ -20,8 +20,9 @@ class BaseStrategy(ABC):
     
     def calculate_returns(self):
         """Calculate strategy returns."""
-        if self.positions is None:
-            self.generate_signals()
+        # Always regenerate signals to ensure consistency with current price data
+        # This is important when strategies are reused across multiple runs or feature building
+        self.generate_signals()
         
         # Passive returns
         self.data['passive_returns'] = np.log(

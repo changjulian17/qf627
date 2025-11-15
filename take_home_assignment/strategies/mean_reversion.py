@@ -87,6 +87,71 @@ class ZScoreStrategy(BaseStrategy):
         return self.positions
 
 
+class BollingerBandStrategy(BaseStrategy):
+    """Bollinger Band mean reversion strategy.
+    
+    This strategy uses Bollinger Bands to identify overbought and oversold conditions.
+    It goes long when price touches the lower band and short when price touches the upper band,
+    exiting when price returns to the middle band.
+    """
+    
+    def __init__(self, data, window=20, num_std=2.0):
+        name = f"BB_w{window}_std{num_std}"
+        super().__init__(name, data)
+        self.window = int(window)
+        self.num_std = float(num_std)
+    
+    def generate_signals(self):
+        """Generate Bollinger Band based signals."""
+        ti = TechnicalIndicators()
+        
+        # Calculate Bollinger Bands
+        middle, upper, lower = ti.calculate_bollinger_bands(
+            self.data[self.data.columns[0]], 
+            self.window, 
+            self.num_std
+        )
+        
+        self.data['bb_middle'] = middle
+        self.data['bb_upper'] = upper
+        self.data['bb_lower'] = lower
+        self.data = self.data.dropna()
+        
+        price = self.data[self.data.columns[0]]
+        
+        # Signal logic:
+        # Long when price crosses below lower band (oversold)
+        # Short when price crosses above upper band (overbought)
+        # Exit when price crosses middle band
+        
+        # Long signal: price touches or crosses below lower band
+        long_entry = (price <= self.data['bb_lower'])
+        # Short signal: price touches or crosses above upper band
+        short_entry = (price >= self.data['bb_upper'])
+        
+        # Exit signals: price crosses middle band
+        exit_long = (price >= self.data['bb_middle']) & (price.shift(1) < self.data['bb_middle'].shift(1))
+        exit_short = (price <= self.data['bb_middle']) & (price.shift(1) > self.data['bb_middle'].shift(1))
+        
+        # Initialize positions
+        positions = pd.Series(np.nan, index=self.data.index)
+        
+        # Set entry positions
+        positions[long_entry] = 1
+        positions[short_entry] = -1
+        
+        # Set exit positions
+        positions[exit_long | exit_short] = 0
+        
+        # Forward fill to maintain positions
+        self.positions = positions.ffill().fillna(0)
+        self.trades = self.positions.diff()
+        self.data['positions'] = self.positions
+        self.data['trades'] = self.trades
+        
+        return self.positions
+
+
 def generate_rsi_variants(data, periods=None, threshold_pairs=None):
     """Generate a list of RSIStrategy instances for all combinations of
     `periods` and `threshold_pairs`.
@@ -122,5 +187,43 @@ def generate_rsi_variants(data, periods=None, threshold_pairs=None):
     for p in periods:
         for (os_val, ob_val) in threshold_pairs:
             variants.append(RSIStrategy(price_df, period=p, oversold=os_val, overbought=ob_val))
+
+    return variants
+
+def generate_bollinger_variants(data, windows=None, std_devs=None):
+    """Generate a list of BollingerBandStrategy instances for all combinations of
+    `windows` and `std_devs`.
+
+    Parameters
+    ----------
+    data : pd.Series or pd.DataFrame
+        Price series or single-column DataFrame to pass to strategy instances.
+    windows : list[int]
+        List of Bollinger Band lookback windows to use. Default: [20, 30].
+    std_devs : list[float]
+        List of standard deviation multipliers. Default: [1.5, 2.0, 2.5].
+
+    Returns
+    -------
+    list[BollingerBandStrategy]
+        Strategy instances ready to be backtested.
+    """
+    import pandas as _pd
+
+    if windows is None:
+        windows = [20, 30]
+    if std_devs is None:
+        std_devs = [1.5, 2.0, 2.5]
+
+    variants = []
+    # if user passed a Series, make it a DataFrame with a single column
+    if isinstance(data, _pd.Series):
+        price_df = data.to_frame()
+    else:
+        price_df = data.copy()
+
+    for w in windows:
+        for std in std_devs:
+            variants.append(BollingerBandStrategy(price_df, window=w, num_std=std))
 
     return variants

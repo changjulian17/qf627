@@ -20,7 +20,7 @@ print("\n" + "="*80)
 print("BUILDING ML FEATURES:")
 print("="*80)
 
-from strategies.ml_strategies import build_ml_features_from_strategies
+from features.feature_engineering import build_ml_features_from_strategies
 
 X, y = build_ml_features_from_strategies(prices, strategies)
 

@@ -8,7 +8,9 @@ import pandas as pd
 import yfinance as yf
 from datetime import datetime
 from .base_strategy import BaseStrategy
+from features.technical_indicators import TechnicalIndicators
 from config import CURRENCY_INDICES, MARKET_INDICES
+from utils.yfinance_cache import get_cached_ticker_data
 
 
 class CoincidentIndexStrategy(BaseStrategy):
@@ -33,10 +35,16 @@ class CoincidentIndexStrategy(BaseStrategy):
         self.window = window
         self.correlation_threshold = correlation_threshold
         self.coincident_data = None
+        self._cached_raw_data = None  # Cache for Yahoo Finance data to ensure consistency
         
     def fetch_coincident_data(self, start_date, end_date):
         """Fetch data for the coincident index."""
-        try:
+        # Return in-memory cached data if available (for multiple calls within same run)
+        if self._cached_raw_data is not None:
+            return self._cached_raw_data
+        
+        # Use persistent disk cache to ensure consistency across runs
+        def _fetch():
             ticker = yf.Ticker(self.coincident_ticker)
             coincident = ticker.history(start=start_date, end=end_date)
             if coincident.empty:
@@ -46,6 +54,14 @@ class CoincidentIndexStrategy(BaseStrategy):
             close_data = coincident['Close']
             if close_data.index.tz is not None:
                 close_data.index = close_data.index.tz_localize(None)
+            return close_data
+        
+        try:
+            close_data = get_cached_ticker_data(
+                self.coincident_ticker, start_date, end_date, _fetch
+            )
+            # Cache in memory for subsequent calls within same run
+            self._cached_raw_data = close_data
             return close_data
         except Exception as e:
             print(f"Error fetching {self.coincident_ticker}: {e}")
@@ -84,7 +100,6 @@ class CoincidentIndexStrategy(BaseStrategy):
         
         # Add z-score of price for ML features (stationary version)
         # Also shift to avoid leakage
-        from features.technical_indicators import TechnicalIndicators
         ti = TechnicalIndicators()
         self.data[f'{self.coincident_ticker}_price_zscore'] = ti.calculate_zscore(
             self.coincident_data.shift(1), window=self.window
@@ -133,12 +148,18 @@ class MultiCoincidentStrategy(BaseStrategy):
         self.aggregation = aggregation
         self.include_individual_features = include_individual_features
         self.correlation_window = correlation_window
+        self._cached_raw_data = None  # Cache for Yahoo Finance data to ensure consistency
         
     def fetch_coincident_data(self, start_date, end_date):
         """Fetch data for all coincident indices."""
+        # Return in-memory cached data if available (for multiple calls within same run)
+        if self._cached_raw_data is not None:
+            return self._cached_raw_data
+        
         coincident_dict = {}
         for ticker in self.coincident_tickers:
-            try:
+            # Use persistent disk cache for each ticker
+            def _fetch():
                 ticker_obj = yf.Ticker(ticker)
                 ticker_data = ticker_obj.history(start=start_date, end=end_date)
                 if not ticker_data.empty:
@@ -146,16 +167,25 @@ class MultiCoincidentStrategy(BaseStrategy):
                     # Remove timezone to match primary data
                     if close_data.index.tz is not None:
                         close_data.index = close_data.index.tz_localize(None)
-                    coincident_dict[ticker] = close_data
+                    return close_data
                 else:
                     print(f"Warning: No data found for {ticker}")
+                    return None
+            
+            try:
+                data = get_cached_ticker_data(ticker, start_date, end_date, _fetch)
+                if data is not None:
+                    coincident_dict[ticker] = data
             except Exception as e:
                 print(f"Error fetching {ticker}: {e}")
         
         if not coincident_dict:
             return None
         
-        return pd.DataFrame(coincident_dict)
+        result = pd.DataFrame(coincident_dict)
+        # Cache in memory for subsequent calls within same run
+        self._cached_raw_data = result
+        return result
     
     def generate_signals(self):
         """Generate composite signals from multiple coincident indices."""

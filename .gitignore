@@ -24,3 +24,4 @@ Lessons/Lesson 10/QF627-G3-Programming and Computational Finance - 1142025 - 906
 *.html
 *.txt
 exam/*
+take_home_assignment/data/yfinance_cache/*.pkl

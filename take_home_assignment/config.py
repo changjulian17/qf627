@@ -34,6 +34,8 @@ MEAN_REVERSION_PARAMS = {
     'rsi_oversold': 30,
     'zscore_window': 42,
     'zscore_threshold': 2,
+    'bollinger_windows': [20, 30, 50],
+    'bollinger_std_devs': [1.5, 2.0, 2.5],
 }
 
 # Volume and oscillator strategy parameters
@@ -60,6 +62,8 @@ ML_PARAMS = {
     'models': ['RandomForest', 'GradientBoosting', 'LASSO'],
     'tune_hyperparameters': True,  # Use GridSearchCV to tune each model
     'n_jobs': 1,  # Number to 1 to manage resource usage
+    'ic_percentile': 5,  # Top percentile of features by Information Coefficient (0-100). None = no filtering
+    'correlation_threshold': 1,  # Threshold for removing highly correlated features in Stage 2 filtering (0-1)
 }
 
 # Common coincident indices for strategy use

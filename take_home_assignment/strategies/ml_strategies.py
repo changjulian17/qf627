@@ -6,16 +6,8 @@ and convert predictions into long/short signals.
 from __future__ import annotations
 import pandas as pd
 import numpy as np
-from sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor, GradientBoostingRegressor, AdaBoostRegressor
-from sklearn.linear_model import LinearRegression, ElasticNet, Lasso
-from sklearn.svm import SVR
-from sklearn.neighbors import KNeighborsRegressor
-from sklearn.tree import DecisionTreeRegressor
-from sklearn.model_selection import GridSearchCV
-from xgboost import XGBRegressor
-from typing import Optional, Any    
-from features.technical_indicators import zscore
-from config import ML_HYPERPARAMETER_GRIDS, ML_PARAMS, ZSCORE_WINDOW
+from typing import Optional, Any
+from features.feature_engineering import build_ml_features_from_strategies
 
 
 class MLStrategy:
@@ -26,7 +18,8 @@ class MLStrategy:
     """
 
     def __init__(self, prices: pd.DataFrame, feature_strategies: list, test_start_date, 
-                 model: Any, model_name: str = "ML", threshold: float = 0.0):
+                 model: Any, model_name: str = "ML", threshold: float = 0.0,
+                 prebuilt_features: tuple = None):
         """
         Args:
             prices: Price DataFrame
@@ -35,6 +28,7 @@ class MLStrategy:
             model: sklearn-compatible model instance
             model_name: Short name for the model (e.g., 'RF', 'LinReg')
             threshold: Prediction threshold for long/short signals (default 0.0)
+            prebuilt_features: Optional tuple of (X, y) pre-computed features to avoid rebuilding
         """
         self.prices = prices
         self.feature_strategies = feature_strategies
@@ -47,6 +41,7 @@ class MLStrategy:
         self._trained = False
         self.train_mse = None
         self.test_mse = None
+        self.prebuilt_features = prebuilt_features
         
     def fit(self, X: pd.DataFrame, y: pd.Series):
         """Train the underlying model."""
@@ -72,7 +67,12 @@ class MLStrategy:
         if self.data is not None:
             return  # already computed
             
-        X, y = build_ml_features_from_strategies(self.prices, self.feature_strategies)
+        # Use prebuilt features if available, otherwise build from strategies
+        if self.prebuilt_features is not None:
+            X, y = self.prebuilt_features
+        else:
+            X, y = build_ml_features_from_strategies(self.prices, self.feature_strategies, self.test_start_date)
+        
         if X.empty or y.empty:
             print(f"Warning: No ML features available for {self.name}; creating empty data.")
             self.data = pd.DataFrame(index=self.prices.index)
@@ -121,150 +121,4 @@ class MLStrategy:
         self.data['trades'] = self.data['positions'].diff().abs().fillna(0)
 
 
-def create_ml_models(tune_hyperparameters=False, saved_best_params=None):
-    """Create a dictionary of ML models for strategy testing.
-    
-    Args:
-        tune_hyperparameters: If True, returns GridSearchCV wrapped models for tuning.
-                             If False, returns models with default parameters.
-        saved_best_params: Dict mapping model names to their best parameters from previous runs.
-                          If provided, these params will be used instead of tuning.
-    
-    Returns a dict with model_name -> (model_instance, short_name) pairs.
-    """
-    if saved_best_params is None:
-        saved_best_params = {}
-    
-    random_seed = ML_PARAMS.get('random_seed', 42)
-    
-    base_models = {
-        'Linear Regression': (LinearRegression(), 'LinReg'),
-        'Elastic Net': (ElasticNet(random_state=random_seed), 'ElasticNet'),
-        'LASSO': (Lasso(random_state=random_seed), 'LASSO'),
-        'XGBoost' : (XGBRegressor(random_state=random_seed, n_jobs=ML_PARAMS.get('n_jobs', -1)), 'XGB'),
-        # 'Support Vector Machine': (SVR(), 'SVM'),
-        'K-Nearest Neighbor': (KNeighborsRegressor(), 'KNN'),
-        'Decision Tree': (DecisionTreeRegressor(random_state=random_seed), 'DTree'),
-        'Extra Trees': (ExtraTreesRegressor(random_state=random_seed), 'ExtraTrees'),
-        'Random Forest': (RandomForestRegressor(random_state=random_seed), 'RF'),
-        'Gradient Boosting': (GradientBoostingRegressor(random_state=random_seed), 'GBT'),
-        'Adaptive Boosting': (AdaBoostRegressor(random_state=random_seed), 'AdaBoost'),
-    }
-    
-    tuned_models = {}
-    
-    for model_name, (model, short_name) in base_models.items():
-        # Check if we have saved best params for this model
-        if model_name in saved_best_params:
-            print(f"  → Using saved best params for {model_name}: {saved_best_params[model_name]}")
-            model.set_params(**saved_best_params[model_name])
-            tuned_models[model_name] = (model, short_name)
-        elif tune_hyperparameters:
-            # Only tune if we don't have saved params
-            param_grid = ML_HYPERPARAMETER_GRIDS.get(model_name, {})
-            
-            if param_grid:
-                # Use GridSearchCV with 3-fold CV, optimize for negative MSE
-                grid_search = GridSearchCV(
-                    estimator=model,
-                    param_grid=param_grid,
-                    cv=3,
-                    scoring='neg_mean_squared_error',
-                    n_jobs=ML_PARAMS.get('n_jobs', -1),
-                    verbose=0
-                )
-                tuned_models[model_name] = (grid_search, short_name)
-            else:
-                # No hyperparameters to tune (e.g., LinearRegression)
-                tuned_models[model_name] = (model, short_name)
-        else:
-            # No tuning, just use default params
-            tuned_models[model_name] = (model, short_name)
-    
-    return tuned_models
-
-
-def build_ml_features_from_strategies(prices: pd.DataFrame, strategies: list):
-    """Aggregate numeric indicator columns from each strategy into a feature DataFrame.
-
-    Returns X (DataFrame) and y (Series of forward log returns).
-    """
-    feature_frames = []
-
-    # Ensure strategies have indicator columns populated
-    for strat in strategies:
-        # compute indicators/returns if not yet present
-        try:
-            strat.calculate_returns()
-        except Exception:
-            # ignore if already computed or not applicable
-            pass
-
-        df = strat.data.copy()
-        # Exclude: returns, positions, trades, Close (redundant with price)
-        # Also exclude raw SMAs/EMAs (they're trending - only keep normalized spreads)
-        # Also exclude price column from each strategy (trending, use price_zscore instead)
-        # Also exclude individual window returns (redundant across strategies - keep only signals)
-        exclude = {
-            "strategy_returns", "cum_strategy_returns", "passive_returns", 
-            "cum_passive_returns", "position", "trades", "Close", "positions"
-        }
-        
-        # Get the price column name (first column in prices DataFrame)
-        price_col = prices.columns[0] if len(prices.columns) > 0 else 'price'
-        
-        indicator_cols = []
-        for c in df.select_dtypes(include=["number"]).columns:
-            if c in exclude:
-                continue
-            # Exclude price column (trending, we'll use price_zscore instead)
-            if c == price_col:
-                continue
-            # Exclude correlation/weight diagnostic columns from multi-coincident strategies
-            if c.endswith('_correlation') or c.endswith('_weight'):
-                continue
-            # Exclude raw SMA/EMA columns (keep only normalized spreads/z-scores)
-            if c.startswith('sma_') or c.startswith('ema_'):
-                continue
-            # Exclude raw coincident index prices (they're trending)
-            # Keep _price_zscore columns (already normalized in strategy)
-            if c.endswith('_price'):
-                continue
-            # Exclude individual window returns (redundant - keep only aggregated signals)
-            # These returns appear multiple times across different multi-window strategies
-            if c.startswith('ret_') or c.endswith('_ret_5d') or c.endswith('_ret_10d') or \
-               c.endswith('_ret_20d') or c.endswith('_ret_60d'):
-                continue
-            indicator_cols.append(c)
-        
-        if indicator_cols:
-            tmp = df[indicator_cols].copy()
-            
-            # prefix columns with strategy name to avoid collisions
-            tmp.columns = [f"{strat.name}__{c}" for c in tmp.columns]
-            feature_frames.append(tmp)
-
-    if not feature_frames:
-        return pd.DataFrame(index=prices.index), pd.Series(dtype=float)
-
-    # Add normalized price (z-score) instead of raw price
-    price_series = prices[prices.columns[0]]
-    price_zscore = zscore(price_series, window=ZSCORE_WINDOW)
-    price_df = pd.DataFrame({'price_zscore': price_zscore}, index=prices.index)
-    
-    X = pd.concat(feature_frames + [price_df], axis=1).sort_index()
-    print(f"Built ML feature set with {X.shape[1]} features from {len(strategies)} strategies.")
-    print(f"Feature names: {X.columns.tolist()}")
-
-    # compute forward return as target (using original price for returns calculation)
-    log_ret = np.log(price_series / price_series.shift(1))
-    y = log_ret.shift(-1).rename('fwd_log_ret')
-
-    # drop rows with NaNs in features or target
-    combined = pd.concat([X, y], axis=1).dropna()
-    X_clean = combined.drop(columns=['fwd_log_ret'])
-    y_clean = combined['fwd_log_ret']
-    return X_clean, y_clean
-
-
-__all__ = ["MLStrategy", "create_ml_models", "build_ml_features_from_strategies"]
+__all__ = ["MLStrategy"]

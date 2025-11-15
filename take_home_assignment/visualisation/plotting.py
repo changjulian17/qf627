@@ -184,9 +184,9 @@ def plot_top_strategy_vs_benchmark(results, comparison_df, initial_capital=10000
     spy_return = comparison_df.loc['SPY', 'Total Return']
     spy_sharpe = comparison_df.loc['SPY', 'Sharpe Ratio']
     
-    metrics_text = f'{top_strategy_name}: Return={top_return:.2f}%, Sharpe={top_sharpe:.4f}\n'
-    metrics_text += f'SPY: Return={spy_return:.2f}%, Sharpe={spy_sharpe:.4f}\n'
-    metrics_text += f'Alpha: {top_return - spy_return:.2f}%'
+    metrics_text = f'{top_strategy_name}: Total Return={top_return:.2%}, Sharpe={top_sharpe:.4f}\n'
+    metrics_text += f'SPY: Total Return={spy_return:.2%}, Sharpe={spy_sharpe:.4f}\n'
+    metrics_text += f'Alpha: {top_return - spy_return:.2%}'
     
     # # Plot 2: Position indicator
     # if positions is not None:
@@ -340,14 +340,14 @@ def plot_top_n_strategies_vs_benchmark(results, comparison_df, top_n=5, initial_
     print(f"TOP {len(top_strategies)} STRATEGIES PERFORMANCE SUMMARY")
     print("="*80)
     
-    print(f"\n{'Rank':<6} {'Strategy':<40} {'Return':<12} {'Sharpe':<10} {'Max DD':<10}")
+    print(f"\n{'Rank':<6} {'Strategy':<40} {'Total Return':<12} {'Sharpe':<10} {'Max DD':<10}")
     print("-" * 80)
     
     spy_return = comparison_df.loc['SPY', 'Total Return']
     spy_sharpe = comparison_df.loc['SPY', 'Sharpe Ratio']
     spy_dd = comparison_df.loc['SPY', 'Max Drawdown']
     
-    print(f"{'   -':<6} {'SPY (Benchmark)':<40} {spy_return:>10.2f}% {spy_sharpe:>9.4f} {spy_dd:>9.2f}%")
+    print(f"{'   -':<6} {'SPY (Benchmark)':<40} {spy_return:>10.2%} {spy_sharpe:>9.4f} {-spy_dd:>9.2%}")
     print("-" * 80)
     
     for i, strategy_name in enumerate(top_strategies, 1):
@@ -356,8 +356,8 @@ def plot_top_n_strategies_vs_benchmark(results, comparison_df, top_n=5, initial_
         dd = comparison_df.loc[strategy_name, 'Max Drawdown']
         alpha = ret - spy_return
         
-        print(f"{i:<6} {strategy_name:<40} {ret:>10.2f}% {sharpe:>9.4f} {dd:>9.2f}%")
-        print(f"{'':6} {'  → Alpha vs SPY:':<40} {alpha:>10.2f}%")
+        print(f"{i:<6} {strategy_name:<40} {ret:>10.2%} {sharpe:>9.4f} {-dd:>9.2%}")
+        print(f"{'':6} {'  → Alpha vs SPY:':<40} {alpha:>10.2%}")
     
     print("="*80 + "\n")
     
