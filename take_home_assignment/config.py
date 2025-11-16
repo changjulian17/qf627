@@ -58,12 +58,18 @@ VOLUME_OSCILLATOR_PARAMS = {
 
 ML_PARAMS = {
     'train_test_split': 0.75,
-    'random_seed': 627,
+    'random_seed': 1111,
     'models': ['RandomForest', 'GradientBoosting', 'LASSO'],
     'tune_hyperparameters': True,  # Use GridSearchCV to tune each model
     'n_jobs': 1,  # Number to 1 to manage resource usage
-    'ic_percentile': 5,  # Top percentile of features by Information Coefficient (0-100). None = no filtering
+    'ic_percentile': 20,  # Top percentile of features by Information Coefficient (0-100). None = no filtering
     'correlation_threshold': 1,  # Threshold for removing highly correlated features in Stage 2 filtering (0-1)
+    'nan_threshold': 0.3,  # Threshold for removing columns with high NaN percentage (0-1). E.g., 0.3 = remove columns with >30% NaNs
+    # Debug/controls for feature filtering
+    'feature_filter_debug': True,  # Prints detailed keep/remove decisions
+    # Optionally force-keep certain features regardless of correlation filtering (full column names)
+    # e.g., ['Coincident_TLT_5__TLT_signal']
+    'force_keep_features': ['Coincident_TLT_5__TLT_signal'],
 }
 
 # Common coincident indices for strategy use
@@ -156,41 +162,41 @@ ML_HYPERPARAMETER_GRIDS = {
     },
     
     'Decision Tree': {
-        'max_depth': [5, 10, None],
+        'max_depth': [1, 2, 3, 5],
         'min_samples_split': [2, 10],
         'min_samples_leaf': [1, 4],
     },
     
     'Extra Trees': {
-        'n_estimators': [100, 200],
-        'max_depth': [10, None],
+        'n_estimators': [5, 10, 20, 100],
+        'max_depth': [1, 2, 3, 5],
         'min_samples_split': [2, 10],
         'min_samples_leaf': [1, 4],
     },
     
     'Random Forest': {
-        'n_estimators': [100, 200],
-        'max_depth': [10, None],
+        'n_estimators': [5, 10, 20, 100],
+        'max_depth': [1, 2, 3, 5],
         'min_samples_split': [2, 10],
         'min_samples_leaf': [1, 4],
     },
     
     'Gradient Boosting': {
-        'n_estimators': [100, 200],
+        'n_estimators': [5, 10, 20, 100],
         'learning_rate': [0.01, 0.1],
-        'max_depth': [3, 5],
+        'max_depth': [1, 2, 3, 5],
         'min_samples_split': [2, 10],
     },
     
     'Adaptive Boosting': {
-        'n_estimators': [100, 200],
+        'n_estimators': [5, 10, 20, 100],
         'learning_rate': [0.1, 1.0]
     },
     
     'XGBoost': {
-        'n_estimators': [100, 200],
+        'n_estimators': [5, 10, 20, 100],
         'learning_rate': [0.01, 0.1],
-        'max_depth': [3, 5],
+        'max_depth': [1, 2, 3, 5],
         'subsample': [0.8, 1.0],
     }
 }

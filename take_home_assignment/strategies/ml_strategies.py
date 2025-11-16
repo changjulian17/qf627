@@ -55,11 +55,8 @@ class MLStrategy:
         return pd.Series(self.model.predict(X), index=X.index)
 
     def signals_from_preds(self, preds: pd.Series) -> pd.Series:
-        """Convert predictions to long/short signals: long if pred > threshold else short."""
-        # signal = pd.Series(np.where(preds > self.threshold, 1, 
-        #                           np.where(preds > -.01, -1, np.nan)), index=preds.index).ffill()
-        signal = pd.Series(np.where(preds > self.threshold, 1, 
-                                  np.where(preds > -.01, 0, -1)), index=preds.index)
+        """Convert predictions to long/short signals."""
+        signal = pd.Series(np.where(preds > self.threshold, 1, -1), index=preds.index)
         return signal
         
     def calculate_returns(self):
@@ -112,6 +109,7 @@ class MLStrategy:
         price_col = self.prices.columns[0]
         self.data = pd.DataFrame({price_col: self.prices[price_col].reindex(X.index)})
         self.data['passive_returns'] = np.log(self.data[price_col] / self.data[price_col].shift(1)).fillna(0)
+        
         # Standardize on 'positions' (plural) across all strategies
         self.data['positions'] = signals.reindex(self.data.index).fillna(0)
         self.data['strategy_returns'] = self.data['positions'].shift(1).fillna(0) * self.data['passive_returns']

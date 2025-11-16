@@ -7,7 +7,9 @@ from __future__ import annotations
 import pandas as pd
 import numpy as np
 from typing import List, Optional, Tuple
+from pathlib import Path
 from .technical_indicators import zscore
+from backtesting.metrics import PerformanceMetrics
 from config import ML_PARAMS, ZSCORE_WINDOW
 
 
@@ -53,58 +55,102 @@ def build_ml_dataset(prices: pd.Series, exog: pd.DataFrame = None, lags=[5,15,30
 
 
 def filter_features_by_ic(X: pd.DataFrame, y: pd.Series, test_start_date, 
-                          ic_percentile: float, correlation_threshold: float = 0.8) -> pd.DataFrame:
-    """Filter features by Information Coefficient using two-stage filtering.
-    
-    Stage 1: Select top features by IC (correlation with target)
-    Stage 2: Remove highly correlated feature pairs, keeping the one with higher IC
-    
-    Prevents look-ahead bias by calculating IC and correlations only on training data,
-    then applying the same feature selection to the full dataset.
-    
+                          ic_percentile: float, correlation_threshold: float = 0.8) -> Tuple[pd.DataFrame, pd.Series]:
+    """Filter features by Sharpe ratio using two-stage filtering (train-only selection).
+
+    Stage 1: Rank features by the absolute Sharpe ratio of a strategy that uses
+             positions based on feature sign: positions = np.where(feature > 0, 1, -1),
+             then calculates strategy_returns = y_train * positions.shift(1).
+             This matches the actual strategy logic (see BaseStrategy.calculate_returns).
+             Keep the top ``ic_percentile`` percent by Sharpe.
+
+    Stage 2: Remove highly correlated feature pairs (based on training data
+             correlations), keeping the one with higher Stage 1 score.
+
+    Prevents look-ahead bias by calculating Sharpe and correlations only on
+    training data, then applying the same feature selection to the full dataset.
+
     Args:
         X: Feature DataFrame with datetime index
-        y: Target Series with datetime index
+        y: Target Series with datetime index (e.g., next-period log returns)
         test_start_date: Date that splits train/test periods
         ic_percentile: Top percentile of features to keep (0-100)
         correlation_threshold: Threshold for removing correlated features (default 0.8)
-    
+
     Returns:
-        Filtered feature DataFrame with only top IC features that aren't highly correlated
+        Tuple of (X_filtered, y_filtered) with aligned indices after dropping NaN rows
     """
     if test_start_date is None:
-        print("Warning: IC filtering requires test_start_date to prevent look-ahead bias. Skipping filtering.")
-        return X
+        print("Warning: Sharpe filtering requires test_start_date to prevent look-ahead bias. Skipping filtering.")
+        return X, y
     
-    # Calculate IC using ONLY training data
+    # Calculate metrics using ONLY training data
     train_mask = X.index < test_start_date
     X_train = X[train_mask]
     y_train = y[train_mask]
     
     if X_train.empty or y_train.empty:
-        print("Warning: No training data available for IC filtering. Skipping filtering.")
-        return X
+        print("Warning: No training data available for Sharpe filtering. Skipping filtering.")
+        return X, y
     
-    # STAGE 1: Calculate Information Coefficient (correlation) for each feature with target
-    ic_values = {}
+    # Remove columns with more than threshold% NaN values before filtering
+    nan_threshold = ML_PARAMS.get('nan_threshold', 0.3)
+    nan_percentages = X.isna().mean()
+    cols_to_drop = nan_percentages[nan_percentages > nan_threshold].index.tolist()
+    
+    if cols_to_drop:
+        print(f"Pre-filtering: Removing {len(cols_to_drop)} columns with >{nan_threshold*100}% NaN values")
+        X = X.drop(columns=cols_to_drop)
+        X_train = X[train_mask]
+    
+    # STAGE 1: Calculate Sharpe ratio for each feature using actual strategy logic
+    # Match the train period calculation: passive_returns * positions.shift(1)
+    # where positions = np.where(feature > 0, 1, -1) to replicate Coincident strategy logic
+    # 
+    # IMPORTANT: Features like `TLT_signal` are ALREADY shifted in strategy generation,
+    # so we should NOT shift positions again. The feature value at time t uses data up to t-1.
+    # Strategy logic: positions[t] = where(signal[t] > 0, 1, -1)
+    #                 strategy_returns[t] = passive_returns[t] * positions[t-1]
+    # Since signal is already lagged, positions[t] uses info up to t-1
+    # Then positions.shift(1) gives us positions[t-1] for time t
+    # 
+    # For features that are pre-shifted signals: positions = where(feature > 0, 1, -1)
+    # Then: strategy_returns = y_train * positions.shift(1)
+    sharpe_values = {}
+    sharpe_values_signed = {}
     for col in X_train.columns:
-        ic = X_train[col].corr(y_train)
-        ic_values[col] = abs(ic)  # Use absolute IC to capture both positive and negative predictive power
-    
+        # Generate positions from feature: +1 when feature > 0, -1 otherwise
+        positions = pd.Series(np.where(X_train[col] > 0, 1, -1), index=X_train.index)
+        # Calculate strategy returns using same logic as BaseStrategy.calculate_returns()
+        # strategy_returns = passive_returns * positions.shift(1)
+        strat_ret = (y_train.shift(1) * positions.shift(1)).fillna(0)
+        
+        if strat_ret.std(ddof=1) == 0 or strat_ret.empty:
+            sharpe = 0.0
+        else:
+            sharpe = float(PerformanceMetrics.calculate_sharpe_ratio(strat_ret, periods_per_year=252))
+            
+        # sharpe_values_signed[col] = sharpe
+        sharpe_values[col] = abs(sharpe)
+
     # Calculate the threshold for top percentile
-    ic_series = pd.Series(ic_values)
-    threshold = ic_series.quantile((100 - ic_percentile) / 100)
+    sharpe_series = pd.Series(sharpe_values)
     
+    # Print all Sharpe values (disable truncation)
+    with pd.option_context('display.max_rows', None, 'display.max_columns', None):
+        print("\nAll Feature Sharpe Ratios (sorted descending):")
+        print(sharpe_series.sort_values(ascending=False))
+    
+    threshold = sharpe_series.quantile((100 - ic_percentile) / 100)
+
     # Select features above the threshold
-    stage1_features = ic_series[ic_series >= threshold].sort_values(ascending=False).index.tolist()
+    stage1_sorted = sharpe_series[sharpe_series >= threshold].sort_values(ascending=False, kind='mergesort')
+    stage1_features = stage1_sorted.index.tolist()
     
     if len(stage1_features) == 0:
         print(f"Warning: IC filtering with percentile={ic_percentile} removed all features. Using all features.")
-        return X
-    
-    print(f"Stage 1 - IC filtering (train-only): kept top {ic_percentile}% of features ({len(stage1_features)}/{len(ic_values)})")
-    print(f"  IC threshold: {threshold:.4f}")
-    print(f"  Top 5 features by IC: {ic_series.nlargest(5).to_dict()}")
+        return X, y
+
     
     # STAGE 2: Remove highly correlated features, keeping the one with higher IC
     # Calculate correlation matrix using ONLY training data
@@ -115,7 +161,7 @@ def filter_features_by_ic(X: pd.DataFrame, y: pd.Series, test_start_date,
     features_to_keep = []
     features_removed = []
     
-    # Iterate through features sorted by IC (highest first)
+    # Iterate through features sorted by Sharpe (highest first)
     for feature in stage1_features:
         # Check if this feature is already removed due to correlation with a higher-IC feature
         if feature in features_removed:
@@ -129,23 +175,34 @@ def filter_features_by_ic(X: pd.DataFrame, y: pd.Series, test_start_date,
             if other_feature == feature or other_feature in features_removed:
                 continue
             
-            # If highly correlated, remove the one with lower IC (which is the current other_feature)
-            if corr_matrix.loc[feature, other_feature] >= correlation_threshold:
+            # If highly correlated, remove the one with lower Sharpe (which is the current other_feature)
+            corr_val = corr_matrix.loc[feature, other_feature]
+            if pd.notna(corr_val) and corr_val >= correlation_threshold:
                 features_removed.append(other_feature)
     
     if len(features_to_keep) == 0:
         print(f"Warning: Correlation filtering removed all features. Using Stage 1 features.")
         features_to_keep = stage1_features
-    
+
     # Apply same feature selection to entire dataset (train + test)
     X_filtered = X[features_to_keep]
+    
+    # Drop rows with any remaining NaN values from the entire dataset
+    rows_before_total = len(X_filtered)
+    X_filtered = X_filtered.dropna()
+    rows_dropped_total = rows_before_total - len(X_filtered)
+    if rows_dropped_total > 0:
+        print(f"Final cleaning: Dropped {rows_dropped_total} rows with NaN values from full dataset ({rows_dropped_total/rows_before_total*100:.1f}%)")
     
     print(f"Stage 2 - Correlation filtering: removed {len(features_removed)} highly correlated features (threshold={correlation_threshold})")
     print(f"  Final feature count: {len(features_to_keep)}/{len(stage1_features)}")
     if features_removed:
         print(f"  Removed features: {features_removed[:10]}{'...' if len(features_removed) > 10 else ''}")
     
-    return X_filtered
+    # Align y with the cleaned X_filtered (same rows)
+    y_filtered = y.loc[X_filtered.index]
+    
+    return X_filtered, y_filtered
 
 
 def build_ml_features_from_strategies(prices: pd.DataFrame, strategies: list, 
@@ -232,7 +289,7 @@ def build_ml_features_from_strategies(prices: pd.DataFrame, strategies: list,
     y = log_ret.shift(-1).rename('fwd_log_ret')
 
     # drop rows with NaNs in features or target
-    combined = pd.concat([X, y], axis=1).dropna()
+    combined = pd.concat([X, y], axis=1)
     X_clean = combined.drop(columns=['fwd_log_ret'])
     y_clean = combined['fwd_log_ret']
     
@@ -241,7 +298,7 @@ def build_ml_features_from_strategies(prices: pd.DataFrame, strategies: list,
     ic_percentile = ML_PARAMS.get('ic_percentile')
     correlation_threshold = ML_PARAMS.get('correlation_threshold', 0.8)
     if ic_percentile is not None and 0 < ic_percentile <= 100:
-        X_clean = filter_features_by_ic(X_clean, y_clean, test_start_date, ic_percentile, correlation_threshold)
+        X_clean, y_clean = filter_features_by_ic(X_clean, y_clean, test_start_date, ic_percentile, correlation_threshold)
     
     return X_clean, y_clean
 

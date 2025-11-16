@@ -2,11 +2,11 @@
 
 **Project:** QF627 Take-Home Assignment - Trading Strategy Backtesting System
 
-**Total Features:** 167 stationary features for machine learning models
+**Total Features:** 194 stationary features for machine learning models
 
-**Total Strategies:** 91 rule-based strategies generating features
+**Total Strategies:** 100 rule-based strategies generating features
 
-**Last Updated:** November 14, 2025
+**Last Updated:** November 16, 2025
 
 ---
 
@@ -14,7 +14,7 @@
 
 This document describes all machine learning features used in the ML-based trading strategies. All features are engineered to be **stationary** (mean-reverting, no unit root) to improve model performance and prevent overfitting to trending data.
 
-The features are derived from **91 rule-based strategies** across multiple categories:
+The features are derived from **100 rule-based strategies** across multiple categories:
 - **Technical indicators** (11 strategies: MACD, RSI, SMA, Z-Score)
 - **Volume & oscillators** (7 strategies: OBV, Stochastic, ROC)
 - **Coincident indices** (69 strategies: cross-asset correlations)
@@ -27,21 +27,15 @@ All non-stationary features (e.g., raw prices) are transformed using:
 
 ### Feature Breakdown by Type
 
-| Feature Type | Count | Percentage |
-|-------------|-------|------------|
-| Coincident Signals (Returns) | 69 | 41.3% |
-| Coincident Price Z-Scores | 66 | 39.5% |
-| Aggregated Signals | 7 | 4.2% |
-| RSI | 4 | 2.4% |
-| Stochastic Oscillator | 4 | 2.4% |
-| SMA Spread Z-Scores | 3 | 1.8% |
-| MACD (Z-Score Normalized) | 3 | 1.8% |
-| Z-Score Indicators | 3 | 1.8% |
-| ROC (Rate of Change) | 3 | 1.8% |
-| Volume (Raw) | 2 | 1.2% |
-| Other | 2 | 1.2% |
-| Price Z-Score (Global) | 1 | 0.6% |
-| **Total** | **167** | **100%** |
+| Feature Type | Notes |
+|-------------|-------|
+| Coincident Signals (Returns) | Expanded coverage at 5, 20, 252-day windows across currencies, sectors, and market indices. |
+| Coincident Price Z-Scores | Added 5 and 252-day variants alongside 20-day context where applicable. |
+| Aggregated/Composite Signals | Multi-asset composite and multi-window weighted/majority signals updated to 5/20/252 schemas. |
+| Technical Indicators | RSI, MACD, SMA spreads, Z-Score maintained. |
+| Oscillators & Volume | Stochastic, ROC, OBV (z-scored) retained. |
+| Global Price Z-Score | Core normalized SPY price feature retained. |
+| **Total** | **194** features generated this run. |
 
 ---
 
@@ -135,77 +129,75 @@ All non-stationary features (e.g., raw prices) are transformed using:
 
 ---
 
-### 3. Multi-Window Return Features (14 features)
+### 3. Multi-Window Return Features (updated to 5/20/252 windows)
 
-#### 3.1 Same-Asset Multi-Window Returns - 9 features
+#### 3.1 Same-Asset Multi-Window Returns
 
 | Feature Name | Description | Type | Range | Stationarity |
 |-------------|-------------|------|-------|--------------|
-| `MultiWindow_weighted_average_5_10_20_60__ret_5d` | 5-day log return of SPY | Return | (-∞, ∞) | Stationary |
-| `MultiWindow_weighted_average_5_10_20_60__ret_10d` | 10-day log return of SPY | Return | (-∞, ∞) | Stationary |
-| `MultiWindow_weighted_average_5_10_20_60__ret_20d` | 20-day log return of SPY | Return | (-∞, ∞) | Stationary |
-| `MultiWindow_weighted_average_5_10_20_60__ret_60d` | 60-day log return of SPY | Return | (-∞, ∞) | Stationary |
-| `MultiWindow_weighted_average_5_10_20_60__weighted_signal` | Weighted average signal from multiple windows | Signal | [-1, 1] | Stationary |
-| `MultiWindow_majority_vote_5_10_20__ret_5d` | 5-day log return of SPY | Return | (-∞, ∞) | Stationary |
-| `MultiWindow_majority_vote_5_10_20__ret_10d` | 10-day log return of SPY | Return | (-∞, ∞) | Stationary |
-| `MultiWindow_majority_vote_5_10_20__ret_20d` | 20-day log return of SPY | Return | (-∞, ∞) | Stationary |
-| `MultiWindow_majority_vote_5_10_20__majority_signal` | Majority vote signal from multiple windows | Signal | {-1, 0, 1} | Stationary |
+| `MultiWindow_weighted_average_5_20_252__ret_5d` | 5-day log return of SPY | Return | (-∞, ∞) | Stationary |
+| `MultiWindow_weighted_average_5_20_252__ret_20d` | 20-day log return of SPY | Return | (-∞, ∞) | Stationary |
+| `MultiWindow_weighted_average_5_20_252__ret_252d` | 252-day log return of SPY | Return | (-∞, ∞) | Stationary |
+| `MultiWindow_weighted_average_5_20_252__weighted_signal` | Weighted average signal from 5/20/252 windows | Signal | [-1, 1] | Stationary |
+| `MultiWindow_majority_vote_5_20_252__ret_5d` | 5-day log return of SPY | Return | (-∞, ∞) | Stationary |
+| `MultiWindow_majority_vote_5_20_252__ret_20d` | 20-day log return of SPY | Return | (-∞, ∞) | Stationary |
+| `MultiWindow_majority_vote_5_20_252__ret_252d` | 252-day log return of SPY | Return | (-∞, ∞) | Stationary |
+| `MultiWindow_majority_vote_5_20_252__majority_signal` | Majority vote signal from 5/20/252 windows | Signal | {-1, 0, 1} | Stationary |
 
 **Purpose:** Multi-timeframe momentum indicators capturing short, medium, and long-term trends simultaneously.
 
-#### 3.2 Cross-Asset Returns - 5 features
+#### 3.2 Cross-Asset Returns (SPY/QQQ, 5/20/252 windows)
 
 | Feature Name | Description | Type | Range | Stationarity |
 |-------------|-------------|------|-------|--------------|
-| `CrossAsset_SPY_weighted_average_5_10_20_60__SPY_ret_5d` | SPY 5-day log return | Return | (-∞, ∞) | Stationary |
-| `CrossAsset_SPY_weighted_average_5_10_20_60__SPY_ret_10d` | SPY 10-day log return | Return | (-∞, ∞) | Stationary |
-| `CrossAsset_SPY_weighted_average_5_10_20_60__SPY_ret_20d` | SPY 20-day log return | Return | (-∞, ∞) | Stationary |
-| `CrossAsset_SPY_weighted_average_5_10_20_60__SPY_ret_60d` | SPY 60-day log return | Return | (-∞, ∞) | Stationary |
-| `CrossAsset_SPY_weighted_average_5_10_20_60__weighted_signal` | Weighted signal from SPY returns | Signal | [-1, 1] | Stationary |
-| `CrossAsset_QQQ_majority_vote_10_20_60__QQQ_ret_10d` | QQQ 10-day log return | Return | (-∞, ∞) | Stationary |
-| `CrossAsset_QQQ_majority_vote_10_20_60__QQQ_ret_20d` | QQQ 20-day log return | Return | (-∞, ∞) | Stationary |
-| `CrossAsset_QQQ_majority_vote_10_20_60__QQQ_ret_60d` | QQQ 60-day log return | Return | (-∞, ∞) | Stationary |
-| `CrossAsset_QQQ_majority_vote_10_20_60__majority_signal` | Majority vote signal from QQQ returns | Signal | {-1, 0, 1} | Stationary |
+| `CrossAsset_SPY_weighted_average_5_20_252__SPY_ret_5d` | SPY 5-day log return | Return | (-∞, ∞) | Stationary |
+| `CrossAsset_SPY_weighted_average_5_20_252__SPY_ret_20d` | SPY 20-day log return | Return | (-∞, ∞) | Stationary |
+| `CrossAsset_SPY_weighted_average_5_20_252__SPY_ret_252d` | SPY 252-day log return | Return | (-∞, ∞) | Stationary |
+| `CrossAsset_SPY_weighted_average_5_20_252__weighted_signal` | Weighted signal from SPY returns | Signal | [-1, 1] | Stationary |
+| `CrossAsset_QQQ_majority_vote_5_20_252__QQQ_ret_5d` | QQQ 5-day log return | Return | (-∞, ∞) | Stationary |
+| `CrossAsset_QQQ_majority_vote_5_20_252__QQQ_ret_20d` | QQQ 20-day log return | Return | (-∞, ∞) | Stationary |
+| `CrossAsset_QQQ_majority_vote_5_20_252__QQQ_ret_252d` | QQQ 252-day log return | Return | (-∞, ∞) | Stationary |
+| `CrossAsset_QQQ_majority_vote_5_20_252__majority_signal` | Majority vote signal from QQQ returns | Signal | {-1, 0, 1} | Stationary |
 
 **Purpose:** Cross-asset momentum indicators using correlated tech-heavy QQQ to predict SPY movements.
 
 ---
 
-### 4. Coincident Index Features (91 features)
+### 4. Coincident Index Features (expanded, 5/20/252 windows)
 
 These features track currency pairs, market indices, and sector ETFs that have economic relationships with SPY.
 
 #### 4.1 Currency Index Features (16 features)
 
-**DX-Y.NYB (US Dollar Index):**
+**DX-Y.NYB (US Dollar Index):** (windows: 5, 20, 252)
 | Feature Name | Description | Type | Range | Stationarity |
 |-------------|-------------|------|-------|--------------|
-| `Coincident_DX-Y.NYB_20__DX-Y.NYB_signal` | 20-day rolling mean return of DXY | Return | (-∞, ∞) | Stationary |
-| `Coincident_DX-Y.NYB_20__DX-Y.NYB_price_zscore` | Z-score normalized DXY price | Z-score | ~[-3, 3] | Stationary |
+| `Coincident_DX-Y.NYB_5/20/252__DX-Y.NYB_signal` | Rolling mean return of DXY | Return | (-∞, ∞) | Stationary |
+| `Coincident_DX-Y.NYB_5/20/252__DX-Y.NYB_price_zscore` | Z-score normalized DXY price | Z-score | ~[-3, 3] | Stationary |
 | `MultiCoinc_DXY_EUR_JPY_GBP_20__DX-Y.NYB_signal` | DXY signal in multi-currency strategy | Return | (-∞, ∞) | Stationary |
 | `MultiCoinc_DXY_EUR_JPY_GBP_20__DX-Y.NYB_price_zscore` | DXY price z-score in multi-currency strategy | Z-score | ~[-3, 3] | Stationary |
 
-**EURUSD=X (Euro/USD Exchange Rate):**
+**EURUSD=X (Euro/USD Exchange Rate):** (windows: 5, 20, 252)
 | Feature Name | Description | Type | Range | Stationarity |
 |-------------|-------------|------|-------|--------------|
-| `Coincident_EURUSD=X_20__EURUSD=X_signal` | 20-day rolling mean return of EUR/USD | Return | (-∞, ∞) | Stationary |
-| `Coincident_EURUSD=X_20__EURUSD=X_price_zscore` | Z-score normalized EUR/USD rate | Z-score | ~[-3, 3] | Stationary |
+| `Coincident_EURUSD=X_5/20/252__EURUSD=X_signal` | Rolling mean return of EUR/USD | Return | (-∞, ∞) | Stationary |
+| `Coincident_EURUSD=X_5/20/252__EURUSD=X_price_zscore` | Z-score normalized EUR/USD rate | Z-score | ~[-3, 3] | Stationary |
 | `MultiCoinc_DXY_EUR_JPY_GBP_20__EURUSD=X_signal` | EUR/USD signal in multi-currency strategy | Return | (-∞, ∞) | Stationary |
 | `MultiCoinc_DXY_EUR_JPY_GBP_20__EURUSD=X_price_zscore` | EUR/USD z-score in multi-currency strategy | Z-score | ~[-3, 3] | Stationary |
 
-**JPY=X (Japanese Yen/USD Exchange Rate):**
+**JPY=X (Japanese Yen/USD Exchange Rate):** (windows: 5, 20, 252)
 | Feature Name | Description | Type | Range | Stationarity |
 |-------------|-------------|------|-------|--------------|
-| `Coincident_JPY=X_20__JPY=X_signal` | 20-day rolling mean return of JPY/USD | Return | (-∞, ∞) | Stationary |
-| `Coincident_JPY=X_20__JPY=X_price_zscore` | Z-score normalized JPY/USD rate | Z-score | ~[-3, 3] | Stationary |
+| `Coincident_JPY=X_5/20/252__JPY=X_signal` | Rolling mean return of JPY/USD | Return | (-∞, ∞) | Stationary |
+| `Coincident_JPY=X_5/20/252__JPY=X_price_zscore` | Z-score normalized JPY/USD rate | Z-score | ~[-3, 3] | Stationary |
 | `MultiCoinc_DXY_EUR_JPY_GBP_20__JPY=X_signal` | JPY/USD signal in multi-currency strategy | Return | (-∞, ∞) | Stationary |
 | `MultiCoinc_DXY_EUR_JPY_GBP_20__JPY=X_price_zscore` | JPY/USD z-score in multi-currency strategy | Z-score | ~[-3, 3] | Stationary |
 
-**GBPUSD=X (British Pound/USD Exchange Rate):**
+**GBPUSD=X (British Pound/USD Exchange Rate):** (windows: 5, 20, 252)
 | Feature Name | Description | Type | Range | Stationarity |
 |-------------|-------------|------|-------|--------------|
-| `Coincident_GBPUSD=X_20__GBPUSD=X_signal` | 20-day rolling mean return of GBP/USD | Return | (-∞, ∞) | Stationary |
-| `Coincident_GBPUSD=X_20__GBPUSD=X_price_zscore` | Z-score normalized GBP/USD rate | Z-score | ~[-3, 3] | Stationary |
+| `Coincident_GBPUSD=X_5/20/252__GBPUSD=X_signal` | Rolling mean return of GBP/USD | Return | (-∞, ∞) | Stationary |
+| `Coincident_GBPUSD=X_5/20/252__GBPUSD=X_price_zscore` | Z-score normalized GBP/USD rate | Z-score | ~[-3, 3] | Stationary |
 | `MultiCoinc_DXY_EUR_JPY_GBP_20__GBPUSD=X_signal` | GBP/USD signal in multi-currency strategy | Return | (-∞, ∞) | Stationary |
 | `MultiCoinc_DXY_EUR_JPY_GBP_20__GBPUSD=X_price_zscore` | GBP/USD z-score in multi-currency strategy | Z-score | ~[-3, 3] | Stationary |
 
@@ -213,57 +205,57 @@ These features track currency pairs, market indices, and sector ETFs that have e
 
 #### 4.2 Market Index Features (72 features)
 
-**^VIX (CBOE Volatility Index):**
+**^VIX (CBOE Volatility Index):** (windows: 5, 20, 252)
 | Feature Name | Description | Type | Range | Stationarity |
 |-------------|-------------|------|-------|--------------|
-| `Coincident_^VIX_20__^VIX_signal` | 20-day rolling mean return of VIX | Return | (-∞, ∞) | Stationary |
-| `Coincident_^VIX_20__^VIX_price_zscore` | Z-score normalized VIX level | Z-score | ~[-3, 3] | Stationary |
+| `Coincident_^VIX_5/20/252__^VIX_signal` | Rolling mean return of VIX | Return | (-∞, ∞) | Stationary |
+| `Coincident_^VIX_5/20/252__^VIX_price_zscore` | Z-score normalized VIX level | Z-score | ~[-3, 3] | Stationary |
 | `MultiCoinc_VIX_TNX_GLD_TLT_USO_UUP_XLK_XLF_XLV_XLE_XLI_XLP_XLY_XLU_XLR_XLB_XLC_20__^VIX_signal` | VIX signal in multi-market strategy | Return | (-∞, ∞) | Stationary |
 | `MultiCoinc_VIX_TNX_GLD_TLT_USO_UUP_XLK_XLF_XLV_XLE_XLI_XLP_XLY_XLU_XLR_XLB_XLC_20__^VIX_price_zscore` | VIX z-score in multi-market strategy | Z-score | ~[-3, 3] | Stationary |
 
-**^TNX (10-Year Treasury Yield):**
+**^TNX (10-Year Treasury Yield):** (windows: 5, 20, 252)
 | Feature Name | Description | Type | Range | Stationarity |
 |-------------|-------------|------|-------|--------------|
-| `Coincident_^TNX_20__^TNX_signal` | 20-day rolling mean return of 10Y yield | Return | (-∞, ∞) | Stationary |
-| `Coincident_^TNX_20__^TNX_price_zscore` | Z-score normalized 10Y yield | Z-score | ~[-3, 3] | Stationary |
+| `Coincident_^TNX_5/20/252__^TNX_signal` | Rolling mean return of 10Y yield | Return | (-∞, ∞) | Stationary |
+| `Coincident_^TNX_5/20/252__^TNX_price_zscore` | Z-score normalized 10Y yield | Z-score | ~[-3, 3] | Stationary |
 | `MultiCoinc_VIX_TNX_GLD_TLT_USO_UUP_XLK_XLF_XLV_XLE_XLI_XLP_XLY_XLU_XLR_XLB_XLC_20__^TNX_signal` | TNX signal in multi-market strategy | Return | (-∞, ∞) | Stationary |
 | `MultiCoinc_VIX_TNX_GLD_TLT_USO_UUP_XLK_XLF_XLV_XLE_XLI_XLP_XLY_XLU_XLR_XLB_XLC_20__^TNX_price_zscore` | TNX z-score in multi-market strategy | Z-score | ~[-3, 3] | Stationary |
 
-**GLD (Gold ETF):**
+**GLD (Gold ETF):** (windows: 5, 20, 252)
 | Feature Name | Description | Type | Range | Stationarity |
 |-------------|-------------|------|-------|--------------|
-| `Coincident_GLD_20__GLD_signal` | 20-day rolling mean return of gold | Return | (-∞, ∞) | Stationary |
-| `Coincident_GLD_20__GLD_price_zscore` | Z-score normalized gold price | Z-score | ~[-3, 3] | Stationary |
+| `Coincident_GLD_5/20/252__GLD_signal` | Rolling mean return of gold | Return | (-∞, ∞) | Stationary |
+| `Coincident_GLD_5/20/252__GLD_price_zscore` | Z-score normalized gold price | Z-score | ~[-3, 3] | Stationary |
 | `MultiCoinc_VIX_TNX_GLD_TLT_USO_UUP_XLK_XLF_XLV_XLE_XLI_XLP_XLY_XLU_XLR_XLB_XLC_20__GLD_signal` | GLD signal in multi-market strategy | Return | (-∞, ∞) | Stationary |
 | `MultiCoinc_VIX_TNX_GLD_TLT_USO_UUP_XLK_XLF_XLV_XLE_XLI_XLP_XLY_XLU_XLR_XLB_XLC_20__GLD_price_zscore` | GLD z-score in multi-market strategy | Z-score | ~[-3, 3] | Stationary |
 
-**TLT (20+ Year Treasury Bond ETF):**
+**TLT (20+ Year Treasury Bond ETF):** (windows: 5, 20, 252)
 | Feature Name | Description | Type | Range | Stationarity |
 |-------------|-------------|------|-------|--------------|
-| `Coincident_TLT_20__TLT_signal` | 20-day rolling mean return of long bonds | Return | (-∞, ∞) | Stationary |
-| `Coincident_TLT_20__TLT_price_zscore` | Z-score normalized TLT price | Z-score | ~[-3, 3] | Stationary |
+| `Coincident_TLT_5/20/252__TLT_signal` | Rolling mean return of long bonds | Return | (-∞, ∞) | Stationary |
+| `Coincident_TLT_5/20/252__TLT_price_zscore` | Z-score normalized TLT price | Z-score | ~[-3, 3] | Stationary |
 | `MultiCoinc_VIX_TNX_GLD_TLT_USO_UUP_XLK_XLF_XLV_XLE_XLI_XLP_XLY_XLU_XLR_XLB_XLC_20__TLT_signal` | TLT signal in multi-market strategy | Return | (-∞, ∞) | Stationary |
 | `MultiCoinc_VIX_TNX_GLD_TLT_USO_UUP_XLK_XLF_XLV_XLE_XLI_XLP_XLY_XLU_XLR_XLB_XLC_20__TLT_price_zscore` | TLT z-score in multi-market strategy | Z-score | ~[-3, 3] | Stationary |
 
-**USO (Oil ETF):**
+**USO (Oil ETF):** (windows: 5, 20, 252)
 | Feature Name | Description | Type | Range | Stationarity |
 |-------------|-------------|------|-------|--------------|
-| `Coincident_USO_20__USO_signal` | 20-day rolling mean return of oil | Return | (-∞, ∞) | Stationary |
-| `Coincident_USO_20__USO_price_zscore` | Z-score normalized oil price | Z-score | ~[-3, 3] | Stationary |
+| `Coincident_USO_5/20/252__USO_signal` | Rolling mean return of oil | Return | (-∞, ∞) | Stationary |
+| `Coincident_USO_5/20/252__USO_price_zscore` | Z-score normalized oil price | Z-score | ~[-3, 3] | Stationary |
 | `MultiCoinc_VIX_TNX_GLD_TLT_USO_UUP_XLK_XLF_XLV_XLE_XLI_XLP_XLY_XLU_XLR_XLB_XLC_20__USO_signal` | USO signal in multi-market strategy | Return | (-∞, ∞) | Stationary |
 | `MultiCoinc_VIX_TNX_GLD_TLT_USO_UUP_XLK_XLF_XLV_XLE_XLI_XLP_XLY_XLU_XLR_XLB_XLC_20__USO_price_zscore` | USO z-score in multi-market strategy | Z-score | ~[-3, 3] | Stationary |
 
-**UUP (US Dollar Bullish ETF):**
+**UUP (US Dollar Bullish ETF):** (windows: 5, 20, 252)
 | Feature Name | Description | Type | Range | Stationarity |
 |-------------|-------------|------|-------|--------------|
-| `Coincident_UUP_20__UUP_signal` | 20-day rolling mean return of USD ETF | Return | (-∞, ∞) | Stationary |
-| `Coincident_UUP_20__UUP_price_zscore` | Z-score normalized UUP price | Z-score | ~[-3, 3] | Stationary |
+| `Coincident_UUP_5/20/252__UUP_signal` | Rolling mean return of USD ETF | Return | (-∞, ∞) | Stationary |
+| `Coincident_UUP_5/20/252__UUP_price_zscore` | Z-score normalized UUP price | Z-score | ~[-3, 3] | Stationary |
 | `MultiCoinc_VIX_TNX_GLD_TLT_USO_UUP_XLK_XLF_XLV_XLE_XLI_XLP_XLY_XLU_XLR_XLB_XLC_20__UUP_signal` | UUP signal in multi-market strategy | Return | (-∞, ∞) | Stationary |
 | `MultiCoinc_VIX_TNX_GLD_TLT_USO_UUP_XLK_XLF_XLV_XLE_XLI_XLP_XLY_XLU_XLR_XLB_XLC_20__UUP_price_zscore` | UUP z-score in multi-market strategy | Z-score | ~[-3, 3] | Stationary |
 
 #### 4.3 S&P 500 Sector ETF Features (44 features)
 
-Each sector follows the same pattern with `_signal` and `_price_zscore` variants in both single and multi-coincident strategies:
+Each sector follows the same pattern with `_signal` and `_price_zscore` variants, now generated at 5, 20 and 252-day windows, in both single and multi-coincident strategies:
 
 **XLK (Technology Sector):**
 - `Coincident_XLK_20__XLK_signal` / `Coincident_XLK_20__XLK_price_zscore`
@@ -461,6 +453,12 @@ All features are designed to be stationary:
 ---
 
 ## Changelog
+
+**v2.1 - November 16, 2025**
+- Updated to 194 features (from 167) across 100 strategies.
+- Standardized multi-window and cross-asset features to 5/20/252 schemas.
+- Expanded coincident features to include 5 and 252-day windows across assets.
+- Updated documentation sections to reflect new windows and feature names.
 
 **v2.0 - November 14, 2025**
 - Updated to 167 features (from 130)

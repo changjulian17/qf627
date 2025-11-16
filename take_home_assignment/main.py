@@ -6,7 +6,9 @@ review the orchestration steps in `main.py` while the heavy
 lifting remains in `utils/runner.py`.
 """
 from pathlib import Path
+import numpy as np
 from lets_plot import LetsPlot, ggsave
+import pandas as pd
 
 from utils.runner import (
     load_prices_and_test_start,
@@ -20,6 +22,7 @@ from visualisation.plotting import (
     plot_top_strategy_vs_benchmark,
     plot_top_n_strategies_vs_benchmark,
 )
+from backtesting.metrics import PerformanceMetrics
 
 
 def save_plot(plot_obj, filename, script_dir):
@@ -73,7 +76,14 @@ def main():
     # ============================================================
     # STEP 4: Add SPY Benchmark
     # ============================================================
-    spy_res = compute_spy_benchmark(test_start_date)
+    # Build strategy indices for alignment (exclude SPY)
+    align_indices = []
+    for name, res in results.items():
+        df = res.get('data')
+        if name != 'SPY' and df is not None and hasattr(df, 'index') and len(df.index) > 0:
+            align_indices.append(df.index)
+
+    spy_res = compute_spy_benchmark(test_start_date, align_indices=align_indices, period='test')
     if spy_res is not None:
         results['SPY'] = {
             'data': spy_res['data'],
@@ -82,11 +92,44 @@ def main():
             'metrics': spy_res['metrics']
         }
 
+    # ==================== TRAIN period backtests and SPY ====================
+    from utils.runner import run_backtests_on_train_period  # local import to avoid circulars
+    train_results = run_backtests_on_train_period(strategies, test_start_date)
+
+    # Build train alignment indices (exclude SPY)
+    align_indices_train = []
+    for name, res in train_results.items():
+        df = res.get('data')
+        if name != 'SPY' and df is not None and hasattr(df, 'index') and len(df.index) > 0:
+            align_indices_train.append(df.index)
+
+    spy_train = compute_spy_benchmark(test_start_date, align_indices=align_indices_train, period='train')
+    if spy_train is not None:
+        train_results['SPY'] = {
+            'data': spy_train['data'],
+            'final_value': None,
+            'total_return': None,
+            'metrics': spy_train['metrics']
+        }
+
     # ============================================================
     # STEP 5: Save Results
     # ============================================================
     comparison_df = save_and_print_results(results)
     save_detailed_results(results)
+
+    # Train vs Test metrics comparison
+    comparison_train_df = pd.DataFrame({name: res['metrics'] for name, res in train_results.items()}).T
+    comparison_train_df = comparison_train_df.sort_values('Total Return', ascending=False)
+    merged = comparison_train_df.add_suffix(' (Train)').join(
+        comparison_df.add_suffix(' (Test)'), how='outer'
+    )
+    merged_path = (script_dir / "results" / "train_vs_test_comparison.csv")
+    merged.to_csv(merged_path)
+    print("\n" + "="*70)
+    print("TRAIN vs TEST METRICS (saved to results/train_vs_test_comparison.csv)")
+    print("="*70)
+    print(merged.sort_values('Sharpe Ratio (Train)', ascending=False).to_string())
     
     # ============================================================
     # STEP 6: Generate Plots

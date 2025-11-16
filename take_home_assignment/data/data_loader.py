@@ -2,6 +2,8 @@
 import yfinance as yf
 import pandas as pd
 import numpy as np
+from utils.yfinance_cache import get_cached_ticker_data
+
 
 class DataLoader:
     """Handle data fetching and preprocessing."""
@@ -13,12 +15,22 @@ class DataLoader:
         self._data = None
     
     def load_data(self):
-        """Download data from Yahoo Finance."""
-        self._data = yf.download(
-            self.ticker,
-            start=self.start_date,
-            end=self.end_date,
-            auto_adjust=True
+        """Download data from Yahoo Finance with persistent caching."""
+        def _fetch():
+            return yf.download(
+                self.ticker,
+                start=self.start_date,
+                end=self.end_date,
+                auto_adjust=True,
+                progress=False  # Suppress progress bar
+            )
+        
+        # Use cached data to ensure consistency across runs
+        self._data = get_cached_ticker_data(
+            self.ticker, 
+            self.start_date, 
+            self.end_date, 
+            _fetch
         )
         return self._data
     

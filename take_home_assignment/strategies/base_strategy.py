@@ -24,13 +24,17 @@ class BaseStrategy(ABC):
         # This is important when strategies are reused across multiple runs or feature building
         self.generate_signals()
         
-        # Passive returns
-        self.data['passive_returns'] = np.log(
-            self.data[self.data.columns[0]] / 
-            self.data[self.data.columns[0]].shift(1)
-        ).fillna(0)
+        # Calculate passive returns only once to avoid floating point drift
+        # Check if passive_returns already exists and is valid
+        if 'passive_returns' not in self.data.columns or self.data['passive_returns'].isna().all():
+            # Passive returns - calculate once and cache
+            price_col = self.data.columns[0]
+            self.data['passive_returns'] = np.log(
+                self.data[price_col] / 
+                self.data[price_col].shift(1)
+            ).fillna(0)
         
-        # Strategy returns
+        # Strategy returns - always recalculate based on current positions
         self.data['strategy_returns'] = (
             self.data['passive_returns'] * 
             self.positions.shift(1).fillna(0)

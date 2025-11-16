@@ -51,7 +51,7 @@ class PerformanceMetrics:
         return period_stats
     
     @staticmethod
-    def calculate_all_metrics(strategy_returns, cum_returns, train_mse=None, test_mse=None):
+    def calculate_all_metrics(strategy_returns, cum_returns, train_mse=None, test_mse=None, final_value=None):
         """Calculate all performance metrics."""
         pm = PerformanceMetrics()
         
@@ -62,12 +62,9 @@ class PerformanceMetrics:
             'Longest DD Duration': pm.calculate_longest_drawdown_duration(cum_returns),
             'Total Return': cum_returns.iloc[-1] - 1,
             'Volatility': strategy_returns.std() * np.sqrt(252),
+            'Final Value': final_value,
+            'Train MSE': train_mse,
+            'Test MSE': test_mse,
         }
-        
-        # Add MSE metrics if provided (for ML strategies)
-        if train_mse is not None:
-            metrics['Train MSE'] = train_mse
-        if test_mse is not None:
-            metrics['Test MSE'] = test_mse
         
         return metrics

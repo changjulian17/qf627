@@ -57,7 +57,7 @@ class YFinanceCache:
             try:
                 with open(cache_file, 'rb') as f:
                     data = pickle.load(f)
-                print(f"[CACHE] Loaded cached data for {ticker} from {cache_file.name}")
+                # print(f"[CACHE] Loaded cached data for {ticker} from {cache_file.name}")
                 return data
             except Exception as e:
                 print(f"[CACHE] Warning: Failed to load cache for {ticker}: {e}")
@@ -101,10 +101,10 @@ def get_cached_ticker_data(ticker, start_date, end_date, fetch_func):
         ticker: Ticker symbol
         start_date: Start date
         end_date: End date
-        fetch_func: Function to fetch data if not cached (should return pandas Series)
+        fetch_func: Function to fetch data if not cached (should return pandas Series or DataFrame)
         
     Returns:
-        pandas Series of price data
+        pandas Series or DataFrame of price data
     """
     # Try to get from cache first
     data = _cache.get(ticker, start_date, end_date)
@@ -117,7 +117,7 @@ def get_cached_ticker_data(ticker, start_date, end_date, fetch_func):
     data = fetch_func()
     
     # Store in cache
-    if data is not None and not data.empty:
+    if data is not None and not (isinstance(data, pd.Series) and data.empty) and not (isinstance(data, pd.DataFrame) and data.empty):
         _cache.set(ticker, start_date, end_date, data)
     
     return data

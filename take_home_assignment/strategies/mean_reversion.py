@@ -170,7 +170,7 @@ def generate_rsi_variants(data, periods=None, threshold_pairs=None):
     list[RSIStrategy]
         Strategy instances ready to be backtested.
     """
-    import pandas as _pd
+    import pandas as pd
 
     if periods is None:
         periods = [14, 21]
@@ -179,7 +179,7 @@ def generate_rsi_variants(data, periods=None, threshold_pairs=None):
 
     variants = []
     # if user passed a Series, make it a DataFrame with a single column
-    if isinstance(data, _pd.Series):
+    if isinstance(data, pd.Series):
         price_df = data.to_frame()
     else:
         price_df = data.copy()
@@ -208,7 +208,7 @@ def generate_bollinger_variants(data, windows=None, std_devs=None):
     list[BollingerBandStrategy]
         Strategy instances ready to be backtested.
     """
-    import pandas as _pd
+    import pandas as pd
 
     if windows is None:
         windows = [20, 30]
@@ -217,7 +217,7 @@ def generate_bollinger_variants(data, windows=None, std_devs=None):
 
     variants = []
     # if user passed a Series, make it a DataFrame with a single column
-    if isinstance(data, _pd.Series):
+    if isinstance(data, pd.Series):
         price_df = data.to_frame()
     else:
         price_df = data.copy()

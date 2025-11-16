@@ -243,14 +243,14 @@ def plot_top_strategy_vs_benchmark(results, comparison_df, initial_capital=10000
     
     return p1
     
-    # Combine plots vertically
-    from lets_plot import gggrid
-    grid = gggrid([p1, p2], ncol=1) + ggsize(2400, 1800)
-    grid = gggrid([p1, p2], ncol=1) + ggsize(2400, 1800)
+    # # Combine plots vertically
+    # from lets_plot import gggrid
+    # grid = gggrid([p1, p2], ncol=1) + ggsize(2400, 1800)
+    # grid = gggrid([p1, p2], ncol=1) + ggsize(2400, 1800)
     
-    print(f"\n{metrics_text}")
+    # print(f"\n{metrics_text}")
     
-    return grid
+    # return grid
 
 
 def plot_top_n_strategies_vs_benchmark(results, comparison_df, top_n=5, initial_capital=100000):
